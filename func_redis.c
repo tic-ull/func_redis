@@ -132,7 +132,7 @@ static int load_config(int is_reload)
 
 	if (config == CONFIG_STATUS_FILEMISSING || config == CONFIG_STATUS_FILEINVALID) {
 		ast_log(LOG_WARNING, "Unable to load config %s\n", REDIS_CONF);
-		return 0;
+		return -1;
 	}
 
 	ast_mutex_lock(&redis_lock);
@@ -143,37 +143,34 @@ static int load_config(int is_reload)
 
 	if (!(s = ast_variable_retrieve(config, "general", "hostname"))) {
 		ast_log(LOG_WARNING,
-				"Redis: No redis hostname.\n");
-		hostname[0] = '\0';
-	} else {
-		ast_copy_string(hostname, s, sizeof(hostname));
+				"Redis: No redis hostname using localhost.\n");
+		s =  "127.0.0.1";
 	}
+	ast_copy_string(hostname, s, sizeof(hostname));
 
 	if (!(s = ast_variable_retrieve(config, "general", "port"))) {
 		ast_log(LOG_WARNING,
 				"Redis: No Redis port found, using 6379 as default.\n");
-		port = 6379;
-	} else {
-		port = atoi(s);
+		s = "6379";
 	}
+	port = atoi(s);
 	
 	if (!(s = ast_variable_retrieve(config, "general", "dbname"))) {
 		ast_log(LOG_WARNING,
 				"Redis: No database name found, using 'asterisk' as default.\n");
-		strcpy(dbname, "asterisk");
-	} else {
-		ast_copy_string(dbname, s, sizeof(dbname));
+		s =  "asterisk";
 	}
+	ast_copy_string(dbname, s, sizeof(dbname));
 
 	ast_config_destroy(config);
 
 	struct timeval timeout = { 3, 500000 }; // 3.5 seconds
 	redis = redisConnectWithTimeout(hostname, port, timeout);
 
-	if (!redis) {
-		ast_log(LOG_WARNING,
+	if (redis == NULL || redis->err != 0) {
+		ast_log(LOG_ERROR,
 				"Redis: Couldn't establish connection.\n");
-		return 0;
+		return -1;
 	}
 
 	ast_verb(2, "Redis reloaded.\n");
@@ -365,10 +362,34 @@ static struct ast_custom_function redis_delete_function = {
 	.write = function_redis_delete_write,
 };
 
+static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
+{
+	switch (cmd) {
+		case CLI_INIT:
+			e->command = "redis set";
+			e->usage =
+					"Usage: redis set <key> <value>\n"
+							"       Creates an entry in the Redis database for a given key and value.\n";
+			return NULL;
+		case CLI_GENERATE:
+			return NULL;
+	}
+
+	if (a->argc != 4)
+		return CLI_SHOWUSAGE;
+	reply = redisCommand(redis,"SET %s %s", a->argv[2], a->argv[3]);
+
+	if (reply == NULL) {
+		ast_cli(a->fd, "Redis database error.\n");
+	} else {
+		ast_cli(a->fd, "Redis database entry created.\n");
+	}
+	freeReplyObject(reply);
+	return CLI_SUCCESS;
+}
+
 static char *handle_cli_redis_del(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
 {
-	int res;
-
 	switch (cmd) {
 	case CLI_INIT:
 		e->command = "redis del";
@@ -438,7 +459,8 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 
 static struct ast_cli_entry cli_func_redis[] = {
 	AST_CLI_DEFINE(handle_cli_redis_show, "Get all Redis values or by pattern in key"),
-	AST_CLI_DEFINE(handle_cli_redis_del, "Delete a key and value in Redis"),
+	AST_CLI_DEFINE(handle_cli_redis_del, "Delete a key - value in Redis"),
+	AST_CLI_DEFINE(handle_cli_redis_set, "Creates a new key - value in Redis")
 };
 
 static int unload_module(void)
@@ -459,7 +481,7 @@ static int unload_module(void)
 
 static int load_module(void)
 {
-	if(!load_config(0))
+	if(load_config(0) == -1)
 		return AST_MODULE_LOAD_DECLINE;
 	int res = 0;
 	
