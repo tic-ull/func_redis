@@ -24,7 +24,7 @@
 
 #include <asterisk.h>
 
-ASTERISK_FILE_VERSION(__FILE__, "$Revision: 1 $")
+ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 1 $")
 
 
 #include <asterisk/module.h>
@@ -36,10 +36,13 @@ ASTERISK_FILE_VERSION(__FILE__, "$Revision: 1 $")
 #include <asterisk/config.h>
 
 #ifndef AST_MODULE
-#define AST_MODULE "func_redis"
+	#define AST_MODULE "func_redis"
 #endif
 
 #include <hiredis/hiredis.h>
+
+#define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
+ast_log(LOG_DEBUG, __VA_ARGS__);
 
 /*** DOCUMENTATION
 	<function name="REDIS" language="en_US">
@@ -78,19 +81,6 @@ ASTERISK_FILE_VERSION(__FILE__, "$Revision: 1 $")
 			<ref type="function">REDIS</ref>
 		</see-also>
 	</function>
-	<function name="REDIS_KEYS" language="en_US">
-		<synopsis>
-			Obtain a list of keys within the Redis database.
-		</synopsis>
-		<syntax>
-			<parameter name="prefix" />
-		</syntax>
-		<description>
-			<para>This function will return a comma-separated list of keys existing
-			at the prefix specified within the Redis database.  If no argument is
-			provided, then a list of key families will be returned.</para>
-		</description>
-	</function>
 	<function name="REDIS_DELETE" language="en_US">
 		<synopsis>
 			Return a value from the database and delete it.
@@ -106,32 +96,29 @@ ASTERISK_FILE_VERSION(__FILE__, "$Revision: 1 $")
 	</function>
  ***/
 
-#define REDIS_CONF "redis.conf"
-#define STR_CONF_SZ 128
+#define REDIS_CONF "func_redis.conf"
+#define STR_CONF_SZ 256
 
 AST_MUTEX_DEFINE_STATIC(redis_lock);
 
 redisContext * redis = NULL;
 redisReply * reply = NULL;
 
-
 static char hostname[STR_CONF_SZ] = "";
 static char dbname[STR_CONF_SZ] = "";
 static int port = 6379;
 
-static int load_config(int is_reload)
+
+static int load_config()
 {
 	struct ast_config *config;
-	const char *s;
-	struct ast_flags config_flags = { is_reload ? CONFIG_FLAG_FILEUNCHANGED : 0 };
+	const char *conf_str;
+	struct ast_flags config_flags = { 0 };
 
 	config = ast_config_load(REDIS_CONF, config_flags);
-	if (config == CONFIG_STATUS_FILEUNCHANGED) {
-		return 0;
-	}
 
 	if (config == CONFIG_STATUS_FILEMISSING || config == CONFIG_STATUS_FILEINVALID) {
-		ast_log(LOG_WARNING, "Unable to load config %s\n", REDIS_CONF);
+		ast_log(LOG_ERROR, "Unable to load config %s\n", REDIS_CONF);
 		return -1;
 	}
 
@@ -141,30 +128,36 @@ static int load_config(int is_reload)
 		redisFree(redis);
 	}
 
-	if (!(s = ast_variable_retrieve(config, "general", "hostname"))) {
+	if (!(conf_str = ast_variable_retrieve(config, "general", "hostname"))) {
 		ast_log(LOG_WARNING,
 				"Redis: No redis hostname using localhost.\n");
-		s =  "127.0.0.1";
+		conf_str =  "127.0.0.1";
 	}
-	ast_copy_string(hostname, s, sizeof(hostname));
+	ast_copy_string(hostname, conf_str, sizeof(hostname));
 
-	if (!(s = ast_variable_retrieve(config, "general", "port"))) {
+	if (!(conf_str = ast_variable_retrieve(config, "general", "port"))) {
 		ast_log(LOG_WARNING,
 				"Redis: No Redis port found, using 6379 as default.\n");
-		s = "6379";
+		conf_str = "6379";
 	}
-	port = atoi(s);
+	port = atoi(conf_str);
 	
-	if (!(s = ast_variable_retrieve(config, "general", "dbname"))) {
+	if (!(conf_str = ast_variable_retrieve(config, "general", "dbname"))) {
 		ast_log(LOG_WARNING,
 				"Redis: No database name found, using 'asterisk' as default.\n");
-		s =  "asterisk";
+		conf_str =  "asterisk";
 	}
-	ast_copy_string(dbname, s, sizeof(dbname));
+	ast_copy_string(dbname, conf_str, sizeof(dbname));
+
+	if (!(conf_str = ast_variable_retrieve(config, "general", "timeout"))) {
+		ast_log(LOG_WARNING,
+				"Redis: No Redis timeout found, using 5 seconds as default.\n");
+		conf_str = "5";
+	}
+	struct timeval timeout = { atoi(conf_str), 0 };
 
 	ast_config_destroy(config);
 
-	struct timeval timeout = { 3, 500000 }; // 3.5 seconds
 	redis = redisConnectWithTimeout(hostname, port, timeout);
 
 	if (redis == NULL || redis->err != 0) {
@@ -173,7 +166,7 @@ static int load_config(int is_reload)
 		return -1;
 	}
 
-	ast_verb(2, "Redis reloaded.\n");
+	ast_verb(2, "Redis config loaded.\n");
 
 	/* Done reloading. Release lock so others can now use driver. */
 	ast_mutex_unlock(&redis_lock);
@@ -204,12 +197,12 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
 		return -1;
 	}
 
-	reply = redisCommand(redis,"GET %s", args.key);
+	reply = redisLoggedCommand(redis,"GET %s", args.key);
 
 	if (reply == NULL) {
 		ast_debug(1, "REDIS: %s not found in database.\n", args.key);
 	} else {
-		strcpy(buf, reply->str);
+		ast_copy_string(buf, reply->str, sizeof(buf));
 		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", buf);
 	}
 
@@ -237,7 +230,7 @@ static int function_redis_write(struct ast_channel *chan, const char *cmd, char 
 		return -1;
 	}
 
-	reply = redisCommand(redis,"SET %s %s", args.key, value);
+	reply = redisLoggedCommand(redis,"SET %s %s", args.key, value);
 
 	if (reply == NULL) {
 		ast_log(LOG_WARNING, "REDIS: Error writing value to database.\n");
@@ -276,13 +269,13 @@ static int function_redis_exists(struct ast_channel *chan, const char *cmd,
 	}
 
 
-	reply = redisCommand(redis,"EXISTS %s", args.key);
+	reply = redisLoggedCommand(redis,"EXISTS %s", args.key);
 
 	if (reply == NULL) {
-		strcpy(buf, "0");
+		ast_copy_string(buf, "0", 1);
 	} else {
 		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", buf);
-		strcpy(buf, "1");
+		ast_copy_string(buf, "1", 1);
 	}
 
 	return 0;
@@ -292,24 +285,6 @@ static struct ast_custom_function redis_exists_function = {
 	.name = "REDIS_EXISTS",
 	.read = function_redis_exists,
 	.read_max = 2,
-};
-
-static int function_redis_keys(struct ast_channel *chan, const char *cmd, char *parse, struct ast_str **result, ssize_t maxlen)
-{
-
-        if (ast_strlen_zero(parse)) {
-                ast_log(LOG_WARNING, "REDIS_KEYS requires no argument, REDIS_KEYS()\n");
-                return -1;
-        }
-        
-        ast_log(LOG_ERROR, "REDIS_KEYS Not implemented yet\n");
-        
-	return 0;
-}
-
-static struct ast_custom_function redis_keys_function = {
-	.name = "REDIS_KEYS",
-	.read2 = function_redis_keys,
 };
 
 static int function_redis_delete(struct ast_channel *chan, const char *cmd,
@@ -333,7 +308,7 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 		return -1;
 	}
 
-	reply = redisCommand(redis,"DEL %s", args.key);
+	reply = redisLoggedCommand(redis,"DEL %s", args.key);
 
 	if (reply == NULL) {
 		ast_debug(1, "REDIS_DELETE: %s not found in database.\n", args.key);
@@ -377,7 +352,7 @@ static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_c
 
 	if (a->argc != 4)
 		return CLI_SHOWUSAGE;
-	reply = redisCommand(redis,"SET %s %s", a->argv[2], a->argv[3]);
+	reply = redisLoggedCommand(redis,"SET %s %s", a->argv[2], a->argv[3]);
 
 	if (reply == NULL) {
 		ast_cli(a->fd, "Redis database error.\n");
@@ -403,7 +378,7 @@ static char *handle_cli_redis_del(struct ast_cli_entry *e, int cmd, struct ast_c
 
 	if (a->argc != 3)
 		return CLI_SHOWUSAGE;
-	reply = redisCommand(redis,"DEL %s", a->argv[2]);
+	reply = redisLoggedCommand(redis,"DEL %s", a->argv[2]);
 	
 	if (reply == NULL) {
 		ast_cli(a->fd, "Redis database entry does not exist.\n");
@@ -421,9 +396,15 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 		e->command = "redis show";
 		e->usage =
 			"Usage: redis show\n"
-			"   OR: redis show key\n"
+			"   OR: redis show [pattern]\n"
 			"       Shows Redis database contents, optionally restricted\n"
-			"       to a key.\n";
+			"       to a pattern.\n"
+			"\n"
+			"		[pattern] pattern to match keys\n"
+			"		Examples :\n"
+			"			- h?llo matches hello, hallo and hxllo\n"
+			"			- h*llo matches hllo and heeeello\n"
+			"			- h[ae]llo matches hello and hallo, but not hillo\n";
 		return NULL;
 	case CLI_GENERATE:
 		return NULL;
@@ -431,10 +412,10 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 	
 	if (a->argc == 3) {
 		/* key */
-		reply = redisCommand(redis,"KEYS %s", a->argv[2]);
+		reply = redisLoggedCommand(redis,"KEYS %s", a->argv[2]);
 	} else if (a->argc == 2) {
 		/* show all */
-		reply = redisCommand(redis,"KEYS *");
+		reply = redisLoggedCommand(redis,"KEYS *");
 	} else {
 		return CLI_SHOWUSAGE;
 	}
@@ -443,7 +424,7 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 	redisReply * get_reply;
 
 	for(i = 0; i < reply->elements; i++){
-		get_reply = redisCommand(redis,"GET %s", reply->element[i]->str);
+		get_reply = redisLoggedCommand(redis,"GET %s", reply->element[i]->str);
 	    if(get_reply != NULL)
 	    {
 			ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, get_reply->str);
@@ -466,7 +447,7 @@ static struct ast_cli_entry cli_func_redis[] = {
 static int unload_module(void)
 {
 	int res = 0;
-	reply = redisCommand(redis, "BGSAVE");
+	reply = redisLoggedCommand(redis, "BGSAVE");
 	freeReplyObject(reply);
 	redisFree(redis);
 	
@@ -474,14 +455,13 @@ static int unload_module(void)
 	res |= ast_custom_function_unregister(&redis_function);
 	res |= ast_custom_function_unregister(&redis_exists_function);
 	res |= ast_custom_function_unregister(&redis_delete_function);
-	res |= ast_custom_function_unregister(&redis_keys_function);
 
 	return res;
 }
 
 static int load_module(void)
 {
-	if(load_config(0) == -1)
+	if(load_config() == -1)
 		return AST_MODULE_LOAD_DECLINE;
 	int res = 0;
 	
@@ -489,7 +469,6 @@ static int load_module(void)
 	res |= ast_custom_function_register_escalating(&redis_function, AST_CFE_BOTH);
 	res |= ast_custom_function_register(&redis_exists_function);
 	res |= ast_custom_function_register_escalating(&redis_delete_function, AST_CFE_READ);
-	res |= ast_custom_function_register(&redis_keys_function);
 
 	return res;
 }
