@@ -13,7 +13,7 @@ It uses hiredis as library for redis.
     - [Archlinux] pacman -S hiredis
     
 - asterisk
-    - [Ubuntu] apt-get install asterisk
+    - [Ubuntu] apt-get install asterisk asterisk-dev
     - [Archlinux] pacman -S asterisk
 
         
