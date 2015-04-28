@@ -19,7 +19,7 @@ It uses hiredis as library for redis.
         
 ## Instalation
 1. Install the dependencies
-2. ```cmake .```
+2. ```cmake -DCMAKE_BUILD_TYPE=Release .```
 3. ```make```
 4. ```make install```
 5. ```make samples```
@@ -38,20 +38,18 @@ Here an example of the file :
 
 ```
 [general]
-# host where is the redis server 
+; host where is the redis server 
 hostname=127.0.0.1
-# Port of the redis server
+; Port of the redis server
 port=6379
-# Database name in redis
+; Database name in redis
 dbname=asterisk
-# Timeout on connect with the redis server
+; Timeout on connect with the redis server
 timeout=3
 ```
 
 
-
-
-### Using func_redis from the Dialplan 
+### Using func_redis from the Dialplan
 
 #### Set a key-value pair
 ```same => n,Set(REDIS(test/count)=$[${COUNT} + 1])```
