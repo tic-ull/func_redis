@@ -1,7 +1,7 @@
 /*
  * func_redis.c
  * 
- * Author : Sergio Medina Toledo <lumasepa@gmail.com>
+ * Author : Sergio Medina Toledo <lumasepa at gmail>
  *
  * This program is free software, distributed under the terms of
  * the GNU General Public License Version 2. See the LICENSE file
@@ -12,7 +12,7 @@
  *
  * \brief Functions for interaction with Redis database
  *
- * \author Sergio Medina Toledo <lumasepa@gmail.com>
+ * \author Sergio Medina Toledo <lumasepa at gmail>
  *
  * \ingroup functions
  */
@@ -43,6 +43,7 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 1 $")
 
 #define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
 ast_log(LOG_DEBUG, __VA_ARGS__);
+
 /*** DOCUMENTATION
 	<function name="REDIS" language="en_US">
 		<synopsis>

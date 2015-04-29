@@ -23,6 +23,7 @@ It uses hiredis as library for redis.
 3. ```make```
 4. ```make install```
 5. ```make samples```
+6. ```make doc```
 
 
 ## Uninstall 
