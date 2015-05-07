@@ -2,8 +2,17 @@
 
 func_redis is a asterisk module to use Redis from the dialplan.
 It uses hiredis as library for redis.
+I have tested it in Asterisk 11.6 certified version.
 
 ## Dependencies
+- gcc
+    - [Ubuntu] apt-get install build-essential
+    - [Archlinux] pacman -S gcc
+    
+- cmake
+    - [Ubuntu] apt-get install cmake
+    - [Archlinux] pacman -S cmake
+    
 - redis
      - [Ubuntu] apt-get install redis-server
      - [Archlinux] pacman -S redis
@@ -59,7 +68,7 @@ timeout=3
 ```same => n,Set(COUNT=${REDIS(test/count)})```
 
 #### Delete a key-value pair
-```same => n,NoOp(Deleting test/count ${REDIS_DELETE(test/count)}```
+```same => n,NoOp(Deleting test/count ${REDIS_DELETE(test/count)})```
 
 #### Check if a key exist in redis
 ```same => n,GotoIf(${REDIS_EXISTS(test/count)}?exist:no_exist)```
@@ -82,14 +91,10 @@ You can use the next commands related to func_redis in the asterisk CLI
     Set the value <value> to the key <key> in redis.
     
 3. ```redis del <key>```
-    Deletes the key-value pair in redis
+    Deletes the key-value pair in redis.
 
 ## Contribute and collaborate
 
 Im open to contributions, if you make a pull-request I will merge it.
 Also you can contact with me in my mail lumasepa at gmail and ask for
 any doubt that you can have.
-
-## AUTHORS
-
-func_redis is written by Sergio Medina Toledo (lumasepa at gmail)

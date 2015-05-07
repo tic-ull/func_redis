@@ -1,3 +1,12 @@
+#
+# CMakeLists.txt
+#
+# Author : Sergio Medina Toledo <lumasepa at gmail>
+#
+# This program is free software, distributed under the terms of
+# the GNU General Public License Version 2. See the LICENSE file
+# at the top of the source tree.
+
 cmake_minimum_required(VERSION 2.8)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")

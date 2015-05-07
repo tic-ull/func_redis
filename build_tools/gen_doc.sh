@@ -1,5 +1,14 @@
 #!/bin/bash
 
+#
+# gen_doc.sh
+#
+# Author : Sergio Medina Toledo <lumasepa at gmail>
+#
+# This program is free software, distributed under the terms of
+# the GNU General Public License Version 2. See the LICENSE file
+# at the top of the source tree.
+
 ASTVARDIR=`cat /etc/asterisk/asterisk.conf| grep astvarlibdir | cut -d ">" -f2`
 
 DOC_FILE="$ASTVARDIR/documentation/thirdparty/func_redis-en_US.xml"

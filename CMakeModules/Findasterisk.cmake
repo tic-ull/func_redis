@@ -1,3 +1,12 @@
+#
+# Findasterisk.cmake
+#
+# Author : Sergio Medina Toledo <lumasepa at gmail>
+#
+# This program is free software, distributed under the terms of
+# the GNU General Public License Version 2. See the LICENSE file
+# at the top of the source tree.
+
 # Locate asterisk includes and library
 # This module defines
 # ASTERISK_LIBRARY_DIR, the name of the asterisk modules library
@@ -21,8 +30,6 @@ find_path( ASTERISK_INCLUDE_DIR asterisk/version.h
   /mingw
 )
 
-# message( "ASTERISK_INCLUDE_DIR is ${ASTERISK_INCLUDE_DIR}" )
-
 find_path( ASTERISK_LIBRARY_DIR app_dial.so
   HINTS
   PATH_SUFFIXES modules
@@ -33,7 +40,6 @@ find_path( ASTERISK_LIBRARY_DIR app_dial.so
   /usr/local/lib64/asterisk
 )
 
-# message( "ASTERISK_LIBRARY_DIR is ${ASTERISK_LIBRARY_DIR}" )
 if(ASTERISK_LIBRARY_DIR)
 set( ASTERISK_FOUND "YES" )
 endif(ASTERISK_LIBRARY_DIR)
