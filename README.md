@@ -4,6 +4,27 @@ func_redis is a asterisk module to use Redis from the dialplan.
 It uses hiredis as library for redis.
 I have tested it in Asterisk 11.6 certified version.
 
+## Motivation of the project
+
+This project is motivated by the need to share information between different
+asterisk in both active-active and active-passive scheme.
+
+In the case of passive-active scheme if you use AstDB for storing data, 
+when system switch over, the data in AstDB isn't in the passive node,
+so some functionality is lost, using Redis instead of AstDB, the active
+node and the passive one can access the data, even the possibility of 
+making an passive active redis scheme in this case the active asterisk 
+attack the active redis and the passive asterisk attacks the passive 
+redis with this scheme you can have on the same machine redis and Asterisk.
+
+In the case of both active-active scheme asterisk can share information easily by redis.
+
+func_redis is not a drop in replacement of AstDB, internally asterisk uses AstDB,
+for example to keep registry of the phones.
+
+You can use an agi script or a system call to a script to use redis from the dialplan
+but the performance is low compared to a asterisk module and the integration is worst.
+
 ## Dependencies
 - gcc
     - [Ubuntu] apt-get install build-essential
