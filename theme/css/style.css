@@ -1,0 +1,127 @@
+.tag-0 {
+    font-size: 16pt;
+}
+
+.tag-1 {
+    font-size: 13pt;
+}
+
+.tag-2 {
+    font-size: 10pt;
+}
+
+.tag-3 {
+    font-size: 8pt;
+}
+
+.tag-4 {
+    font-size: 6pt;
+}
+
+.jumbotron {
+    background-color: #eeeeee;
+    background-size: cover;
+    background-attachment: scroll;
+    background-position: center center;
+    margin-top: -15px;
+    height: 200px;
+}
+
+.entry-content img {
+    max-width: 100%;
+    height: auto;
+}
+
+.entry-content figcaption, .caption {
+    font-size: small;
+    margin-bottom: 2px;
+}
+
+.summary img {
+    max-width: 100%;
+    height: auto;
+}
+
+
+.floatright, .align-right {
+    float: right;
+}
+
+.floatleft, .align-left {
+    float: left;
+}
+
+.floatcenter, .align-center {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+figure.floatright, .align-right {
+    margin-left: 4px;
+}
+
+figure.floatleft, .align-left {
+    margin-right: 4px;
+}
+
+figure.floatcenter, .align-center {
+    margin-bottom: 11px;
+}
+
+.highlighttable pre {
+    /* Removes bootstrap default margin-bottom */
+    margin-bottom: 0px;
+}
+
+.highlighttable {
+    /* Adds them margin-bottom to highlightable instead of <pre> */
+    margin-bottom: 11px;
+}
+
+.highlighttable {
+    width: 100%;
+}
+
+#categories ul, #tags ul {
+    list-style: none;
+    padding: 0;
+    margin-left: 0;
+}
+
+.docutils.footnote td.label {
+    display: table-cell;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    color: inherit;
+    text-align: inherit;
+    white-space: inherit;
+    border-radius: inherit;
+}
+
+.categories-timestamp {
+    color: #AAAAAA;
+    font-size: 0.9em;
+    margin-right: 10px;
+}
+
+.tagcloud li {
+    padding: 0px;
+}
+
+.masonry {
+    column-width: 18em;
+    -moz-column-width: 18em;
+    -webkit-column-width: 18em;
+    column-gap: 0em;
+    -moz-column-gap: 0em;
+    -webkit-column-gap:0em;
+    line-height: 0px;
+}
+
+.masonry .item {
+    display: inline-block;
+    padding: 1px;
+    width: 100%; 
+}

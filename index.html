@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en"
+>
+<head>
+    <title>func_redis - func_redis</title>
+    <!-- Using the latest rendering mode for IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="//static.ull.es/v3/dist/img/favicon.ico">
+    <!--[if IE]><link rel="shortcut icon" href="//static.ull.es/v3/dist/img/favicon.ico"><![endif]-->
+    <!-- Touchicon -->
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="//static.ull.es/v3/dist/img/apple-touch-icon-144-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="//static.ull.es/v3/dist/img/apple-touch-icon-114-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="//static.ull.es/v3/dist/img/apple-touch-icon-72-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" href="//static.ull.es/v3/dist/img/apple-touch-icon-57-precomposed.png">
+
+<link rel="canonical" href="/">
+
+        <meta name="author" content="Universidad de La Laguna" />
+        <meta name="description" content="func_redis func_redis func_redis is a asterisk module to use Redis from the dialplan. It uses hiredis as library for redis. I have tested it in Asterisk 11.6 certified version. Motivation of the project This project is motivated by the need to share information between different asterisk in both active-active ..." />
+
+    <meta property="og:site_name" content="func_redis" />
+    <meta property="og:type" content="article"/>
+    <meta property="og:title" content="func_redis"/>
+    <meta property="og:url" content="/"/>
+    <meta property="og:description" content="func_redis func_redis func_redis is a asterisk module to use Redis from the dialplan. It uses hiredis as library for redis. I have tested it in Asterisk 11.6 certified version. Motivation of the project This project is motivated by the need to share information between different asterisk in both active-active ..." />
+
+
+    <!-- ULL -->
+        <link rel="stylesheet" href="//static.ull.es/v3/dist/css/ull.min.css" type="text/css"/>
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/ekko-lightbox/3.0.3a/ekko-lightbox.min.css"/>
+
+    <link href="/theme/css/pygments/native.css" rel="stylesheet">
+    <link rel="stylesheet" href="/theme/css/style.css" type="text/css"/>
+    <noscript><style> .jsonly { display: none } </style></noscript>
+
+
+</head>
+<body>
+
+<div class="navbar navbar-default navbar-ull" role="navigation">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-app-collapse">
+                <span class="sr-only">Desplegar menú de aplicación</span>
+                <span class="fa fa-bars fa-stack"></span>
+            </button>
+<!--
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-main-collapse">
+                <span class="sr-only">Desplegar menú de navegación</span>
+                <span class="fa fa-link fa-stack"></span>
+            </button>
+-->
+            <a class="navbar-brand" href="http://www.ull.es" title="Universidad de La Laguna">Universidad de La Laguna</a>
+        </div>
+<!--
+        <div class="collapse navbar-collapse navbar-main-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li class="dropdown">
+                    <a href="#" class="dropdown-toggle" data-toggle="dropdown">Contacto <b class="caret"></b></a>
+                    <ul class="dropdown-menu">
+                        <li><a target="_blank" href="http://www.ull.es"><i class="fa fa-globe"></i> Página Web ULL</a></li>
+                        <li><a target="_blank" title="Formulario de contacto" href="http://www.ull.es/view/institucional/ull/Contacto_3/es"><i class="fa fa-list-alt"></i> Formulario de contacto</a></li>
+                        <li><a target="_blank" title="Teléfonos" href="http://www.ull.es/view/institucional/ull/Telefonos/es"><i class="fa fa-phone"></i> Directorio telefónico</a></li>
+                        <li class="divider"></li>
+                        <li>
+                            <ul class="rrss text-muted list-inline">
+                                <li><a target="_blank" href="http://www.facebook.com/universidaddelalaguna"><i class="fa fa-facebook-square"></i></a></li>
+                                <li><a target="_blank" href="http://www.tuenti.com/#m=Page&amp;func=index&amp;page_key=1_160_68944913"><i class="fa fa-tumblr-square"></i></a></li>
+                                <li><a target="_blank" href="http://twitter.com/CanalULL"><i class="fa fa-twitter-square"></i></a></li>
+                                <li><a target="_blank" href="http://www.linkedin.com/groups/Universidad-Laguna-2656178"><i class="fa fa-linkedin-square"></i></a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+-->
+    </div>
+</div>
+<div class="navbar navbar-default navbar-app" role="navigation">
+    <div class="container-fluid">
+        <div class="navbar-header">
+                <ol class="breadcrumb">
+                    <li class="active"><a href="/">func_redis</a></li>
+                </ol>
+        </div>
+        <div class="collapse navbar-collapse navbar-app-collapse">
+            <ul class="nav navbar-nav navbar-right">
+                        <li class="active"><a href="/">Home</a></li>
+                        <li><a href="/license.html">License</a></li>
+                        <li><a href="/team.html">Team</a></li>
+                        <li><a href="/contact.html">Contact</a></li>
+            </ul>
+        </div>
+        <!-- /.navbar-collapse -->
+    </div>
+</div> <!-- /.navbar -->
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-9" role="main">
+
+    <section id="content" class="body">
+        <h1 class="page-header">func_redis</h1>
+        
+        <div class="entry-content">
+            <div class="section">
+    <ul class="nav nav-tabs header">
+        <li class="active">func_redis</li>
+    </ul>
+    <div class="content">
+<div class="file-content wiki">
+<h1 id="toc_0">func_redis</h1>
+
+<p>func_redis is a asterisk module to use Redis from the dialplan.<br>
+It uses hiredis as library for redis.<br>
+I have tested it in Asterisk 11.6 certified version.</p>
+
+<h2 id="toc_1">Motivation of the project</h2>
+
+<p>This project is motivated by the need to share information between different<br>
+asterisk in both active-active and active-passive scheme.</p>
+
+<p>In the case of passive-active scheme if you use AstDB for storing data, <br>
+when system switch over, the data in AstDB isn't in the passive node,<br>
+so some functionality is lost, using Redis instead of AstDB, the active<br>
+node and the passive one can access the data, even the possibility of <br>
+making an passive active redis scheme in this case the active asterisk <br>
+attack the active redis and the passive asterisk attacks the passive <br>
+redis with this scheme you can have on the same machine redis and Asterisk.</p>
+
+<p>In the case of both active-active scheme asterisk can share information easily by redis.</p>
+
+<p>func_redis is not a drop in replacement of AstDB, internally asterisk uses AstDB,<br>
+for example to keep registry of the phones.</p>
+
+<p>You can use an agi script or a system call to a script to use redis from the dialplan<br>
+but the performance is low compared to a asterisk module and the integration is worst.</p>
+
+<h2 id="toc_2">Dependencies</h2>
+
+<ul>
+<li><p>gcc</p>
+
+<ul>
+<li>[Ubuntu] apt-get install build-essential</li>
+<li>[Archlinux] pacman -S gcc</li>
+</ul></li>
+<li><p>cmake</p>
+
+<ul>
+<li>[Ubuntu] apt-get install cmake</li>
+<li>[Archlinux] pacman -S cmake</li>
+</ul></li>
+<li><p>redis</p>
+
+<ul>
+<li>[Ubuntu] apt-get install redis-server</li>
+<li>[Archlinux] pacman -S redis</li>
+</ul></li>
+<li><p>hiredis</p>
+
+<ul>
+<li>[Ubuntu] apt-get install libhiredis-dev</li>
+<li>[Archlinux] pacman -S hiredis</li>
+</ul></li>
+<li><p>asterisk</p>
+
+<ul>
+<li>[Ubuntu] apt-get install asterisk asterisk-dev</li>
+<li>[Archlinux] pacman -S asterisk</li>
+</ul></li>
+</ul>
+
+<h2 id="toc_3">Instalation</h2>
+
+<ol>
+<li>Install the dependencies</li>
+<li><code>cmake -DCMAKE_BUILD_TYPE=Release .</code></li>
+<li><code>make</code></li>
+<li><code>make install</code></li>
+<li><code>make samples</code></li>
+<li><code>make doc</code></li>
+</ol>
+
+<h2 id="toc_4">Uninstall</h2>
+
+<ul>
+<li><code>make unistall</code></li>
+</ul>
+
+<h2 id="toc_5">Using func_redis</h2>
+
+<p>In order to use the func_redis you have to configure the settings for the module <br>
+in the file func_redis.conf. There is an example in samples/func_redis.conf.sample, if you <br>
+run make samples it will copy this file to /etc/asterisk</p>
+
+<p>Here an example of the file :</p>
+
+       <div class="monokai"><div class="highlight"><pre><span class="k">[general]</span>
+<span class="c1">; host where is the redis server </span>
+<span class="na">hostname</span><span class="o">=</span><span class="s">127.0.0.1</span>
+<span class="c1">; Port of the redis server</span>
+<span class="na">port</span><span class="o">=</span><span class="s">6379</span>
+<span class="c1">; Database name in redis</span>
+<span class="na">dbname</span><span class="o">=</span><span class="s">asterisk</span>
+<span class="c1">; Timeout on connect with the redis server</span>
+<span class="na">timeout</span><span class="o">=</span><span class="s">3</span>
+</pre></div></div>
+
+
+<h3 id="toc_6">Using func_redis from the Dialplan</h3>
+
+<h4 id="toc_7">Set a key-value pair</h4>
+
+<p><code>same =&gt; n,Set(REDIS(test/count)=$[${COUNT} + 1])</code></p>
+
+<h4 id="toc_8">Get a value from a key</h4>
+
+<p><code>same =&gt; n,Set(COUNT=${REDIS(test/count)})</code></p>
+
+<h4 id="toc_9">Delete a key-value pair</h4>
+
+<p><code>same =&gt; n,NoOp(Deleting test/count ${REDIS_DELETE(test/count)})</code></p>
+
+<h4 id="toc_10">Check if a key exist in redis</h4>
+
+<p><code>same =&gt; n,GotoIf(${REDIS_EXISTS(test/count)}?exist:no_exist)</code></p>
+
+<h3 id="toc_11">Using func_redis from the CLI</h3>
+
+<p>You can use the next commands related to func_redis in the asterisk CLI </p>
+
+<ol>
+<li><p><code>redis show [pattern]</code><br>
+Shows all the key-value pairs in redis.<br>
+[pattern] pattern to match keys<br>
+Examples :<br>
+    - h?llo matches hello, hallo and hxllo<br>
+    - h*llo matches hllo and heeeello<br>
+    - h[ae]llo matches hello and hallo, but not hillo</p></li>
+<li><p><code>redis set &lt;key&gt; &lt;value&gt;</code><br>
+Set the value  to the key  in redis.</p></li>
+<li><p><code>redis del &lt;key&gt;</code><br>
+Deletes the key-value pair in redis.</p></li>
+</ol>
+
+<h2 id="toc_12">Contribute and collaborate</h2>
+
+<p>Im open to contributions, if you make a pull-request I will merge it.<br>
+Also you can contact with me in my mail lumasepa at gmail and ask for<br>
+any doubt that you can have.</p>
+
+    </div>
+
+</div>
+        </div>
+    </section>
+        </div>
+        <div class="col-md-3 sidebar" id="sidebar">
+    <div class="well" style="text-align:center">
+        <a href="https://example.com/tic-ull/sample-site" target="_blank"><img src="images/forkme.png" border="0" alt="Fork me on GitHub" title="Fork me on GitHub"/></a>
+    </div>
+    <div class="panel panel-default panel-ull color-7A3B7A">
+        <div class="panel-heading">
+            <h3 class="panel-title"><i class="fa fa-list"></i> Table of Content</h3>
+        </div>
+        <div class="panel-body">
+            <div class="nav nav-pills nav-stacked">
+                    <li><a href="#toc_1">Motivation of the project</a></li>
+                    <li><a href="#toc_2">Dependencies</a></li>
+                    <li><a href="#toc_3">Instalation</a></li>
+                    <li><a href="#toc_4">Uninstall</a></li>
+                    <li><a href="#toc_5">Using func_redis</a></li>
+                    <li><a href="#toc_12">Contribute and collaborate</a></li>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+    <div class="panel panel-default panel-ull color-336699">
+            <div class="panel-heading">
+                <h3 class="panel-title"><i class="fa fa-external-link-square"></i> Links</h3>
+            </div>
+            <div class="panel-body">
+                    <a target="_blank" href="http://www.ull.es/"><img src="images/ull.png" alt="Universidad de La Laguna" title="Universidad de La Laguna" style="width:80%; margin-left: 10%; margin-right: 10%; margin-bottom: 5%;"></a>
+            </div>
+    </div>
+    <div class="panel panel-default panel-ull color-336699">
+            <div class="panel-heading">
+                <h3 class="panel-title"><i class="fa fa-copyright"></i> Licence</h3>
+            </div>
+            <div class="panel-body">
+                    <ul class="nav nav-pills nav-stacked" style="{position: relative; text-align: center}"><li><a href="https://www.gnu.org/licenses/gpl-2.0.html"> GNU General Public License v2.0 </a></li></ul>
+            </div>
+    </div>
+    <div class="panel panel-default panel-ull color-336699">
+            <div class="panel-heading">
+                <h3 class="panel-title"><i class="fa fa-cogs"></i> Technology</h3>
+            </div>
+            <div class="panel-body">
+                    <ul class="nav nav-pills nav-stacked" style="{position: relative; text-align: center}">
+    <li style="text-align: center"><div class="media"> <a target="_blank" href="http://en.wikipedia.org/wiki/C_%28programming_language%29" > <img title="C language" alt="C language" src="/images/C_language_128.png"> </a> </div></li>
+    <li style="text-align: center"><div class="media"> <a target="_blank" href="http://www.cmake.org/" > <img title="CMake" alt="CMake" src="/images/cmake_128.png"> </a> </div></li>
+    <li style="text-align: center"><div class="media"> <a target="_blank" href="http://www.asterisk.org/" > <img title="Asterisk" alt="Asterisk" src="/images/asterisk_128.png"> </a> </div></li>
+    <li style="text-align: center"><div class="media"> <a target="_blank" href="http://redis.io/" > <img title="Redis" alt="Redis" src="/images/redis_128.png"> </a> </div></li>
+</ul>
+
+
+            </div>
+    </div>
+        </div>
+    </div>
+</div>
+<div id="footer">
+   <div class="container-fluid">
+      <div class="row">
+         <div class="col-xs-12">
+            <ul class="address pull-left">
+                <li><strong>Universidad de La Laguna</strong><br> Pabellón de Gobierno, C/ Molinos de Agua s/n. | San Cristóbal de La Laguna, Santa Cruz de Tenerife - España (38200) | Teléfono: (+34) 922 31 90 00/01</li>
+            </ul>
+            <ul class="list-inline text-muted pull-right">
+                <li><a title="Facebook" target="_blank" href="http://www.facebook.com/universidaddelalaguna"><span class="fa fa-facebook-square"></span></a></li>
+                <li><a title="Tuenti" target="_blank" href="http://www.tuenti.com/#m=Page&amp;func=index&amp;page_key=1_160_68944913"><i class="fa fa-tumblr-square"></i></a></li>
+                <li><a title="Twitter" target="_blank" href="http://twitter.com/CanalULL"><i class="fa fa-twitter-square"></i></a></li>
+                <li><a title="LinkedIn" target="_blank" href="http://www.linkedin.com/groups/Universidad-Laguna-2656178"><i class="fa fa-linkedin-square"></i></a></li>
+                <li><a title="Página web ULL" target="_blank" href="http://www.ull.es"><i class="fa fa-globe"></i></a></li>
+            </ul>
+         </div>
+      </div>
+   </div>
+</div>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="//static.ull.es/v3/dist/js/ull.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/ekko-lightbox/3.0.3a/ekko-lightbox.js"></script>
+
+</body>
+</html>
