@@ -22,7 +22,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 find_package(asterisk REQUIRED)
 
-set(SOURCE_FILES func_redis.c)
+set(SOURCE_FILES src/func_redis.c)
 
 add_library(func_redis SHARED ${SOURCE_FILES})
 

@@ -94,6 +94,8 @@ timeout=3
 #### Check if a key exist in redis
 ```same => n,GotoIf(${REDIS_EXISTS(test/count)}?exist:no_exist)```
 
+#### Publish a message in a redis channel
+```same => n,Set(REDIS_PUBLISH(worker_channel)=do_stuff)```
 
 ### Using func_redis from the CLI
 

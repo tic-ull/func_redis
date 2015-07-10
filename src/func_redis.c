@@ -24,7 +24,7 @@
 
 #include <asterisk.h>
 
-ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 1 $")
+ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 2 $")
 
 
 #include <asterisk/module.h>
@@ -93,6 +93,24 @@ ast_log(LOG_DEBUG, __VA_ARGS__);
 			and then remove that key from the database. <variable>REDIS_RESULT</variable>
 			will be set to the key's value if it exists.</para>
 		</description>
+	</function>
+ 	<function name="REDIS_PUBLISH" language="en_US">
+		<synopsis>
+			Publish a message in a redis channel.
+		</synopsis>
+		<syntax>
+			<parameter name="channel" required="true" />
+		</syntax>
+		<description>
+			<para>This function will publish a message in a redis channel,
+			the result of redis publish is stored in the channel variable
+			REDIS_PUBLISH_RESULT</para>
+		</description>
+		<see-also>
+			<ref type="function">REDIS</ref>
+			<ref type="function">REDIS_DELETE</ref>
+			<ref type="function">REDIS_EXISTS</ref>
+		</see-also>
 	</function>
  ***/
 
@@ -337,6 +355,45 @@ static struct ast_custom_function redis_delete_function = {
 	.write = function_redis_delete_write,
 };
 
+static int function_redis_publish(struct ast_channel *chan, const char *cmd, char *parse,
+								const char *value)
+{
+	AST_DECLARE_APP_ARGS(args,
+						 AST_APP_ARG(redis_channel);
+	);
+
+	if (ast_strlen_zero(parse)) {
+		ast_log(LOG_WARNING, "REDIS_PUBLISH requires one argument, REDIS_PUBLISH(<channel>)=<message>\n");
+		return -1;
+	}
+
+	AST_STANDARD_APP_ARGS(args, parse);
+
+	if (args.argc != 1) {
+		ast_log(LOG_WARNING, "REDIS_PUBLISH requires one argument, REDIS_PUBLISH(<channel>)=<message>\n");
+		return -1;
+	}
+
+	reply = redisLoggedCommand(redis,"PUBLISH %s %s", args.redis_channel, value);
+
+	if (redis == NULL || redis->err != 0) {
+		ast_log(LOG_ERROR, "REDIS: Error publishing message\n");
+	} else {
+        char str_int[21];
+        snprintf(str_int, 21, "%lld", reply->integer);
+        pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", str_int);
+    }
+
+	freeReplyObject(reply);
+
+	return 0;
+}
+
+static struct ast_custom_function redis_publish_function = {
+		.name = "REDIS_PUBLISH",
+		.write = function_redis_publish,
+};
+
 static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
 {
 	switch (cmd) {
@@ -455,6 +512,7 @@ static int unload_module(void)
 	res |= ast_custom_function_unregister(&redis_function);
 	res |= ast_custom_function_unregister(&redis_exists_function);
 	res |= ast_custom_function_unregister(&redis_delete_function);
+	res |= ast_custom_function_unregister(&redis_publish_function);
 
 	return res;
 }
@@ -469,6 +527,7 @@ static int load_module(void)
 	res |= ast_custom_function_register_escalating(&redis_function, AST_CFE_BOTH);
 	res |= ast_custom_function_register(&redis_exists_function);
 	res |= ast_custom_function_register_escalating(&redis_delete_function, AST_CFE_READ);
+	res |= ast_custom_function_register_escalating(&redis_publish_function, AST_CFE_WRITE);
 
 	return res;
 }
