@@ -30,19 +30,19 @@ timeout=3
 ### Using func_redis from the Dialplan
 
 #### Set a key value
-```same => n,Set(REDIS(test)=${TEST}```
+```same => n,Set(REDIS(test)=${TEST})```
 
 #### Set a hash value
 ```same => n,Set(REDIS(test,field)=${TEST})```
 
 #### Get the value from a key
-```same => n,Set(TEST=${REDIS(test})```
+```same => n,Set(TEST=${REDIS(test)})```
 
 #### Get the value from a hash
 ```same => n,Set(TEST=${REDIS(test,field)})```
 
 #### Delete a key
-```same => n,NoOp(Deleting test ${REDIS_DELETE(test)```
+```same => n,NoOp(Deleting test key ${REDIS_DELETE(test)})```
 
 #### Check if a key exists
 ```same => n,GotoIf(${REDIS_EXISTS(test)}?exists:doesnt_exist)```
