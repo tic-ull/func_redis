@@ -274,7 +274,7 @@ static int redis_connect()
 			ast_log(LOG_ERROR, "Unable to authenticate.\n");
 			return -1;
 		}
-		ast_log(LOG_ERROR, "Authenticated.\n");
+		ast_log(LOG_WARNING, "Authenticated.\n");
 		freeReplyObject(reply);
 	}
 
@@ -690,4 +690,17 @@ static int load_module(void)
 	return res;
 }
 
-AST_MODULE_INFO_STANDARD(ASTERISK_GPL_KEY, "Redis related dialplan functions");
+static int reload(void)
+{
+	ast_log(LOG_WARNING,"Reloading.\n");
+	if(load_config() == -1 || redis_connect() == -1)
+		return AST_MODULE_LOAD_DECLINE;
+	int res = 0;
+	return res;
+}
+
+AST_MODULE_INFO(ASTERISK_GPL_KEY, AST_MODFLAG_DEFAULT, "Redis related dialplan functions",
+			.load = load_module,
+			.unload = unload_module,
+			.reload = reload,
+			);
