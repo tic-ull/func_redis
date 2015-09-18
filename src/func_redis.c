@@ -24,7 +24,7 @@
 
 #include <asterisk.h>
 
-ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 2 $")
+ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 3 $")
 
 
 #include <asterisk/module.h>
@@ -42,7 +42,8 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 2 $")
 #include <hiredis/hiredis.h>
 
 #define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
-ast_log(LOG_DEBUG, __VA_ARGS__);
+ast_log(LOG_DEBUG, __VA_ARGS__); \
+ast_log(LOG_DEBUG, "\n");
 
 /*** DOCUMENTATION
 	<function name="REDIS" language="en_US">
@@ -178,9 +179,10 @@ static int load_config()
 
 	redis = redisConnectWithTimeout(hostname, port, timeout);
 
-	if (redis == NULL || redis->err != 0) {
+	if (redis != NULL && redis->err) {
 		ast_log(LOG_ERROR,
 				"Redis: Couldn't establish connection.\n");
+        ast_log(LOG_WARNING, "%s\n", redis->errstr);
 		return -1;
 	}
 
@@ -217,8 +219,9 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
 
 	reply = redisLoggedCommand(redis,"GET %s", args.key);
 
-	if (reply == NULL || redis->err != 0 || reply->type == REDIS_REPLY_NIL) {
+	if ((redis != NULL && redis->err) || reply->type == REDIS_REPLY_NIL) {
 		ast_log(LOG_DEBUG, "REDIS: %s not found in database.\n", args.key);
+        ast_log(LOG_WARNING, "%s\n", redis->errstr);
 	} else {
 		strcpy(buf, reply->str);
 		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", reply->str);
@@ -250,8 +253,9 @@ static int function_redis_write(struct ast_channel *chan, const char *cmd, char 
 
 	reply = redisLoggedCommand(redis,"SET %s %s", args.key, value);
 
-	if (redis == NULL || redis->err != 0) {
+	if (redis != NULL && redis->err) {
 		ast_log(LOG_WARNING, "REDIS: Error writing value to database.\n");
+        ast_log(LOG_WARNING, "%s\n", redis->errstr);
 	}
 
 	freeReplyObject(reply);
@@ -289,12 +293,13 @@ static int function_redis_exists(struct ast_channel *chan, const char *cmd,
 
 	reply = redisLoggedCommand(redis,"EXISTS %s", args.key);
 
-	if (redis == NULL || redis->err != 0) {
+	if (redis != NULL && redis->err) {
+        ast_log(LOG_DEBUG, "%s\n", redis->errstr);
 		strcpy(buf, "0");
 	} else {
-		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", buf);
 		strcpy(buf, "1");
 	}
+    pbx_builtin_setvar_helper(chan, "REDIS_RESULT", buf);
 
 	return 0;
 }
@@ -328,8 +333,9 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 
 	reply = redisLoggedCommand(redis,"DEL %s", args.key);
 
-	if (redis == NULL || redis->err != 0) {
+	if (redis != NULL && redis->err) {
 		ast_log(LOG_DEBUG, "REDIS_DELETE: %s not found in database.\n", args.key);
+        ast_log(LOG_ERROR, "%s\n", redis->errstr);
 	}
 
 	freeReplyObject(reply);
@@ -376,8 +382,9 @@ static int function_redis_publish(struct ast_channel *chan, const char *cmd, cha
 
 	reply = redisLoggedCommand(redis,"PUBLISH %s %s", args.redis_channel, value);
 
-	if (redis == NULL || redis->err != 0) {
-		ast_log(LOG_ERROR, "REDIS: Error publishing message\n");
+	if (redis != NULL && redis->err) {
+        ast_log(LOG_ERROR, "REDIS: Error publishing message\n");
+        ast_log(LOG_ERROR, "%s\n", redis->errstr);
 	} else {
         char str_int[21];
         snprintf(str_int, 21, "%lld", reply->integer);
@@ -411,7 +418,8 @@ static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_c
 		return CLI_SHOWUSAGE;
 	reply = redisLoggedCommand(redis,"SET %s %s", a->argv[2], a->argv[3]);
 
-	if (redis == NULL || redis->err != 0) {
+	if (redis != NULL && redis->err) {
+        ast_cli(a->fd, redis->errstr);
 		ast_cli(a->fd, "Redis database error.\n");
 	} else {
 		ast_cli(a->fd, "Redis database entry created.\n");
@@ -437,8 +445,10 @@ static char *handle_cli_redis_del(struct ast_cli_entry *e, int cmd, struct ast_c
 		return CLI_SHOWUSAGE;
 	reply = redisLoggedCommand(redis,"DEL %s", a->argv[2]);
 	
-	if (redis == NULL || redis->err != 0) {
+	if (redis != NULL && redis->err) {
+        ast_cli(a->fd, redis->errstr);
 		ast_cli(a->fd, "Redis database entry does not exist.\n");
+
 	} else {
 		ast_cli(a->fd, "Redis database entry removed.\n");
 	}
