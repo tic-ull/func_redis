@@ -73,8 +73,8 @@ Here an example of the file :
 hostname=127.0.0.1
 ; Port of the redis server
 port=6379
-; Database name in redis
-dbname=asterisk
+; Database number in redis
+db=0
 ; Timeout on connect with the redis server
 timeout=3
 ```

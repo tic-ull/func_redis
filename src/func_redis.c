@@ -18,6 +18,7 @@
  */
 
 /*** MODULEINFO
+    <depend>hiredis</depend>
 	<support_level>extended</support_level>
  ***/
 
@@ -43,7 +44,7 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 3 $")
 
 #define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
 ast_log(LOG_DEBUG, __VA_ARGS__); \
-ast_log(LOG_DEBUG, "\n");
+
 
 #define replyHaveError(reply) (reply != NULL && reply->type == REDIS_REPLY_ERROR)
 
@@ -121,6 +122,9 @@ ast_log(LOG_DEBUG, "\n");
 #define REDIS_CONF "func_redis.conf"
 #define STR_CONF_SZ 256
 
+// max size of long long [−9223372036854775807,+9223372036854775807]
+#define LONG_LONG_LEN_IN_STR 20
+
 AST_MUTEX_DEFINE_STATIC(redis_lock);
 
 redisContext * redis = NULL;
@@ -130,6 +134,44 @@ static char hostname[STR_CONF_SZ] = "";
 static char dbname[STR_CONF_SZ] = "";
 static int port = 6379;
 
+static int get_reply_value_as_ast_str(redisReply *reply, struct ast_str *value){
+    if (reply != NULL){
+        if (replyHaveError(reply)) {
+            ast_log(LOG_ERROR, "%s\n", reply->str);
+
+        } else if (reply->type == REDIS_REPLY_NIL){
+            ast_log(LOG_DEBUG, "REDIS: reply is NIL \n");
+            value = NULL;
+
+        }else if (reply->type == REDIS_REPLY_INTEGER){
+            value = ast_str_create(LONG_LONG_LEN_IN_STR);
+            ast_str_set(&value, LONG_LONG_LEN_IN_STR, "%lld", reply->integer);
+
+        }else if (reply->type == REDIS_REPLY_STRING){
+            value = ast_str_create(strlen(reply->str));
+            ast_str_set(&value, strlen(reply->str), "%s", reply->str);
+
+        }else if (reply->type == REDIS_REPLY_ARRAY){
+            value = ast_str_create(3);
+            ast_str_set(&value, 3, "[ ");
+            struct ast_str * element_value = NULL;
+            for (int i = 0; i < reply->elements; ++i) {
+                get_reply_value_as_ast_str(reply->element[i], element_value);
+                ast_str_make_space(&value, ast_str_strlen(value) + ast_str_strlen(element_value) + 4);
+                ast_str_append(&value, ast_str_strlen(value),"%s , ", ast_str_buffer(element_value));
+                ast_free(element_value);
+                element_value = NULL;
+            }
+            ast_str_make_space(&value, ast_str_strlen(value) + 3);
+            ast_str_append(&value, ast_str_strlen(value)," ]");
+        }
+    } else {
+        ast_log(LOG_ERROR, "REDIS: reply is NULL \n");
+        value = NULL;
+        return -1;
+    }
+    return 0;
+}
 
 static int load_config()
 {
@@ -146,7 +188,7 @@ static int load_config()
 
 	ast_mutex_lock(&redis_lock);
 
-	if (redis) {
+	if (redis != NULL) {
 		redisFree(redis);
 	}
 
@@ -234,12 +276,13 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
 
-	} else if (reply->type == REDIS_REPLY_NIL){
-        ast_log(LOG_DEBUG, "REDIS: %s not found in database.\n", args.key);
-
-    }else{
-		strcpy(buf, reply->str);
-		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", reply->str);
+	}else{
+        struct ast_str * value = NULL;
+        get_reply_value_as_ast_str(reply, value);
+		strcpy(buf, ast_str_buffer(value));
+		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", ast_str_buffer(value));
+        ast_free(value);
+        value = NULL;
 	}
 
 	freeReplyObject(reply);
@@ -407,9 +450,10 @@ static int function_redis_publish(struct ast_channel *chan, const char *cmd, cha
         ast_log(LOG_ERROR, "REDIS: Error publishing message\n");
         ast_log(LOG_ERROR, "%s\n", reply->str);
 	} else {
-        char str_int[21];
-        snprintf(str_int, 21, "%lld", reply->integer);
-        pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", str_int);
+        struct ast_str * value;
+        get_reply_value_as_ast_str(reply, value);
+        pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", ast_str_buffer(value));
+        ast_free(value);
     }
 
 	freeReplyObject(reply);
@@ -515,7 +559,12 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 		get_reply = redisLoggedCommand(redis,"GET %s", reply->element[i]->str);
 	    if(get_reply != NULL)
 	    {
-			ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, get_reply->str);
+            struct ast_str * value;
+            get_reply_value_as_ast_str(get_reply, value);
+            if (value) {
+                ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, ast_str_buffer(value));
+                ast_free(value);
+            }
 	    }
 		freeReplyObject(get_reply);
 	}
@@ -526,48 +575,21 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 	return CLI_SUCCESS;
 }
 
-static char *handle_cli_redis_status(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
-{
-    switch (cmd) {
-        case CLI_INIT:
-            e->command = "redis status";
-            e->usage =
-                    "Usage: redis status\n"
-                    "       show the func_redis module status\n";
-
-            return NULL;
-        case CLI_GENERATE:
-            return NULL;
-    }
-
-
-    if (a->argc == 2) {
-        /* show all */
-        reply = redisLoggedCommand(redis,"KEYS *");
-    } else {
-        return CLI_SHOWUSAGE;
-    }
-
-    ast_cli(a->fd, "%d results found.\n", (int)reply->elements);
-    freeReplyObject(reply);
-
-    return CLI_SUCCESS;
-}
-
 static struct ast_cli_entry cli_func_redis[] = {
 	AST_CLI_DEFINE(handle_cli_redis_show, "Get all Redis values or by pattern in key"),
 	AST_CLI_DEFINE(handle_cli_redis_del, "Delete a key - value in Redis"),
 	AST_CLI_DEFINE(handle_cli_redis_set, "Creates a new key - value in Redis"),
-	AST_CLI_DEFINE(handle_cli_redis_status, "Show func_redis module status")
 };
 
 static int unload_module(void)
 {
 	int res = 0;
-	reply = redisLoggedCommand(redis, "BGSAVE");
-	freeReplyObject(reply);
-	redisFree(redis);
-	
+    if (redis){
+        reply = redisLoggedCommand(redis, "BGSAVE");
+        freeReplyObject(reply);
+        redisFree(redis);
+    }
+
 	ast_cli_unregister_multiple(cli_func_redis, ARRAY_LEN(cli_func_redis));
 	res |= ast_custom_function_unregister(&redis_function);
 	res |= ast_custom_function_unregister(&redis_exists_function);
