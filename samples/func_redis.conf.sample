@@ -20,5 +20,8 @@ port=6379
 ; Database number in redis
 db=0
 
+; password for redis server
+;password=s3cr3tp@ssw0rd
+
 ; connection time out when connecting to the server
 timeout=3

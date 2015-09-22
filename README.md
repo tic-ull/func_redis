@@ -1,18 +1,71 @@
 # func_redis
 
-func_redis is an Asterisk module to allow the use of Redis from the dialplan.
-It depends on the hiredis library.
+func_redis is a asterisk module to use Redis from the dialplan.
+It uses hiredis as library for redis.
+I have tested it in Asterisk 11.6 certified version.
 
-This project was forked from https://github.com/tic-ull/func_redis by Sergio Medina Toledo
+## Motivation of the project
 
-This fork has been tested with Asterisk 1.8 and 11.
+This project is motivated by the need to share information between different
+asterisk in both active-active and active-passive scheme.
+
+In the case of passive-active scheme if you use AstDB for storing data, 
+when system switch over, the data in AstDB isn't in the passive node,
+so some functionality is lost, using Redis instead of AstDB, the active
+node and the passive one can access the data, even the possibility of 
+making an passive active redis scheme in this case the active asterisk 
+attack the active redis and the passive asterisk attacks the passive 
+redis with this scheme you can have on the same machine redis and Asterisk.
+
+In the case of both active-active scheme asterisk can share information easily by redis.
+
+func_redis is not a drop in replacement of AstDB, internally asterisk uses AstDB,
+for example to keep registry of the phones.
+
+You can use an agi script or a system call to a script to use redis from the dialplan
+but the performance is low compared to a asterisk module and the integration is worst.
+
+## Dependencies
+- gcc
+    - [Ubuntu] apt-get install build-essential
+    - [Archlinux] pacman -S gcc
+    
+- cmake
+    - [Ubuntu] apt-get install cmake
+    - [Archlinux] pacman -S cmake
+    
+- redis
+     - [Ubuntu] apt-get install redis-server
+     - [Archlinux] pacman -S redis
+
+- hiredis
+    - [Ubuntu] apt-get install libhiredis-dev
+    - [Archlinux] pacman -S hiredis
+    
+- asterisk
+    - [Ubuntu] apt-get install asterisk asterisk-dev
+    - [Archlinux] pacman -S asterisk
+
+        
+## Instalation
+1. Install the dependencies
+2. ```cmake -DCMAKE_BUILD_TYPE=Release .```
+3. ```make```
+4. ```make install```
+5. ```make samples```
+6. ```make doc```
+
+
+## Uninstall 
+- ```make unistall```
 
 ## Using func_redis
 
-In order to use func_redis you need to configure the settings for the module 
-in the file func_redis.conf. There is an example in samples/func_redis.conf.sample
+In order to use the func_redis you have to configure the settings for the module 
+in the file func_redis.conf. There is an example in samples/func_redis.conf.sample, if you 
+run make samples it will copy this file to /etc/asterisk
 
-Example:
+Here an example of the file :
 
 ```
 [general]
