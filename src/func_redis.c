@@ -204,16 +204,18 @@ static int load_config()
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "hostname"))) {
 		ast_log(LOG_WARNING,
-				"Redis: No redis hostname using localhost.\n");
+				"No redis hostname, using localhost as default.\n");
 		conf_str =  "127.0.0.1";
 	}
+
 	ast_copy_string(hostname, conf_str, sizeof(hostname));
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "port"))) {
 		ast_log(LOG_WARNING,
-				"Redis: No Redis port found, using 6379 as default.\n");
+				"No redis port found, using 6379 as default.\n");
 		conf_str = "6379";
 	}
+
 	port = atoi(conf_str);
 	
 	if (!(conf_str = ast_variable_retrieve(config, "general", "db"))) {
@@ -226,7 +228,7 @@ static int load_config()
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "password"))) {
 		ast_log(LOG_WARNING,
-				"Redis: No password found, disabling authentication.\n");
+				"No redis password found, disabling authentication.\n");
 		conf_str =  "";
 	}
 
@@ -234,9 +236,10 @@ static int load_config()
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "timeout"))) {
 		ast_log(LOG_WARNING,
-				"Redis: No Redis timeout found, using 5 seconds as default.\n");
+				"No redis timeout found, using 5 seconds as default.\n");
 		conf_str = "5";
 	}
+
 	struct timeval timeout = { atoi(conf_str), 0 };
 
 	ast_config_destroy(config);
@@ -260,18 +263,18 @@ static int redis_connect()
 
 	if (redis == NULL || redis->err != 0) {
 		ast_log(LOG_ERROR,
-			"Redis: Couldn't establish connection.\n");
+			"Couldn't establish connection.\n");
 		return -1;
 	}
 
 	if (strlen(password) != 0) {
-		ast_log(LOG_WARNING,"Redis: Authenticating.\n");
+		ast_log(LOG_WARNING,"Authenticating.\n");
 		reply = redisLoggedCommand(redis,"AUTH %s", password);
 		if (redis == NULL || redis->err != 0) {
-			ast_log(LOG_ERROR, "REDIS: Unable to authenticate.\n");
+			ast_log(LOG_ERROR, "Unable to authenticate.\n");
 			return -1;
 		}
-
+		ast_log(LOG_ERROR, "Authenticated.\n");
 		freeReplyObject(reply);
 	}
 
@@ -304,16 +307,13 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
 		reply = redisLoggedCommand(redis,"HGET %s %s", args.key, args.hash);
 	}
 
-
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
-
 	}else{
         char * value = get_reply_value_as_str(reply);
 		strcpy(buf, value);
 		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", value);
         free(value);
-        value = NULL;
 	}
 
 	freeReplyObject(reply);
@@ -433,7 +433,7 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
 	} else if (reply->integer == 0){
-        ast_log(LOG_DEBUG, "REDIS_DELETE: %s not found in database.\n", args.key);
+        ast_log(LOG_DEBUG, "REDIS_DELETE: Key %s not found in database.\n", args.key);
     }
 
 	freeReplyObject(reply);
