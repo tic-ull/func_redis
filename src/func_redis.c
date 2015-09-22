@@ -141,6 +141,7 @@ redisReply * reply = NULL;
 static char hostname[STR_CONF_SZ] = "";
 static char dbname[STR_CONF_SZ] = "";
 static char password[STR_CONF_SZ] = "";
+static char bgsave[STR_CONF_SZ] = "";
 static int port = 6379;
 static struct timeval timeout;
 
@@ -242,9 +243,15 @@ static int load_config(void)
 		conf_str = "5";
 	}
 
-	//struct timeval timeout = { atoi(conf_str), 0 };
-
 	timeout.tv_sec = atoi(conf_str);
+
+	if (!(conf_str = ast_variable_retrieve(config, "general", "bgsave"))) {
+		ast_log(LOG_WARNING,
+				"No bgsave setting found, using default of false.\n");
+		conf_str =  "false";
+	}
+
+	ast_copy_string(bgsave, conf_str, sizeof(bgsave));
 
 	ast_config_destroy(config);
 
@@ -672,11 +679,14 @@ static struct ast_cli_entry cli_func_redis[] = {
 static int unload_module(void)
 {
 	int res = 0;
-    if (redis){
-        reply = redisLoggedCommand(redis, "BGSAVE");
-        freeReplyObject(reply);
-        redisFree(redis);
-    }
+
+	if (ast_true(bgsave)) {
+		ast_log(LOG_WARNING, "Sending BGSAVE before closing connection.\n");
+		reply = redisLoggedCommand(redis, "BGSAVE");
+		ast_log(LOG_WARNING, "Closing connection.\n");
+		freeReplyObject(reply);
+	}
+	redisFree(redis);
 
 	ast_cli_unregister_multiple(cli_func_redis, ARRAY_LEN(cli_func_redis));
 	res |= ast_custom_function_unregister(&redis_function);

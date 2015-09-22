@@ -88,6 +88,10 @@ database=0
 ; connection time out when connecting to the server
 ; if not defined, use a default of 5 seconds
 timeout=3
+
+; send a BGSAVE on connection close/module unload
+; if not defined, use a default of false
+bgsave=false
 ```
 
 
