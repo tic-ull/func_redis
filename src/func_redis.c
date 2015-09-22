@@ -134,43 +134,47 @@ static char hostname[STR_CONF_SZ] = "";
 static char dbname[STR_CONF_SZ] = "";
 static int port = 6379;
 
-static int get_reply_value_as_ast_str(redisReply *reply, struct ast_str *value){
+static char * get_reply_value_as_str(redisReply *reply){
+    char * value;
     if (reply != NULL){
         if (replyHaveError(reply)) {
             ast_log(LOG_ERROR, "%s\n", reply->str);
 
         } else if (reply->type == REDIS_REPLY_NIL){
             ast_log(LOG_DEBUG, "REDIS: reply is NIL \n");
-            value = NULL;
+            value = (char*)malloc(1);
+            (*value) = (char)"\0";
 
         }else if (reply->type == REDIS_REPLY_INTEGER){
-            value = ast_str_create(LONG_LONG_LEN_IN_STR);
-            ast_str_set(&value, LONG_LONG_LEN_IN_STR, "%lld", reply->integer);
+            value = (char*)malloc(LONG_LONG_LEN_IN_STR);
+            snprintf(value, LONG_LONG_LEN_IN_STR, "%lld", reply->integer);
 
         }else if (reply->type == REDIS_REPLY_STRING){
-            value = ast_str_create(strlen(reply->str));
-            ast_str_set(&value, strlen(reply->str), "%s", reply->str);
+            value = (char*)malloc(strlen(reply->str) + 1);
+            snprintf(value, strlen(reply->str) + 1, "%s", reply->str);
 
         }else if (reply->type == REDIS_REPLY_ARRAY){
-            value = ast_str_create(3);
-            ast_str_set(&value, 3, "[ ");
-            struct ast_str * element_value = NULL;
+            value = (char*)malloc(3);
+            snprintf(value, 3, "[ ");
+            char * element_value = NULL;
             for (int i = 0; i < reply->elements; ++i) {
-                get_reply_value_as_ast_str(reply->element[i], element_value);
-                ast_str_make_space(&value, ast_str_strlen(value) + ast_str_strlen(element_value) + 4);
-                ast_str_append(&value, ast_str_strlen(value),"%s , ", ast_str_buffer(element_value));
-                ast_free(element_value);
+                element_value = get_reply_value_as_str(reply->element[i]);
+                size_t resize_sz = strlen(value) + strlen(element_value) + 4;
+                value = (char *) realloc(value, resize_sz);
+                snprintf(value, resize_sz, "%s , %s", value, element_value);
+                free(element_value);
                 element_value = NULL;
             }
-            ast_str_make_space(&value, ast_str_strlen(value) + 3);
-            ast_str_append(&value, ast_str_strlen(value)," ]");
+            size_t value_new_sz = strlen(value) + 3;
+            value = (char *) realloc(value, value_new_sz);
+            snprintf(value, value_new_sz, "%s ]", value);
         }
     } else {
         ast_log(LOG_ERROR, "REDIS: reply is NULL \n");
-        value = NULL;
-        return -1;
+        value = (char*)malloc(1);
+        (*value) = (char)"\0";
     }
-    return 0;
+    return value;
 }
 
 static int load_config()
@@ -277,11 +281,10 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
         ast_log(LOG_ERROR, "%s\n", reply->str);
 
 	}else{
-        struct ast_str * value = NULL;
-        get_reply_value_as_ast_str(reply, value);
-		strcpy(buf, ast_str_buffer(value));
-		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", ast_str_buffer(value));
-        ast_free(value);
+        char * value = get_reply_value_as_str(reply);
+		strcpy(buf, value);
+		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", value);
+        free(value);
         value = NULL;
 	}
 
@@ -450,10 +453,9 @@ static int function_redis_publish(struct ast_channel *chan, const char *cmd, cha
         ast_log(LOG_ERROR, "REDIS: Error publishing message\n");
         ast_log(LOG_ERROR, "%s\n", reply->str);
 	} else {
-        struct ast_str * value;
-        get_reply_value_as_ast_str(reply, value);
-        pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", ast_str_buffer(value));
-        ast_free(value);
+        char * value = get_reply_value_as_str(reply);
+        pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", value);
+        free(value);
     }
 
 	freeReplyObject(reply);
@@ -559,12 +561,9 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 		get_reply = redisLoggedCommand(redis,"GET %s", reply->element[i]->str);
 	    if(get_reply != NULL)
 	    {
-            struct ast_str * value;
-            get_reply_value_as_ast_str(get_reply, value);
-            if (value) {
-                ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, ast_str_buffer(value));
-                ast_free(value);
-            }
+            char * value = get_reply_value_as_str(get_reply);
+            ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, value);
+            free(value);
 	    }
 		freeReplyObject(get_reply);
 	}
