@@ -33,8 +33,5 @@ database=0
 ;password=s3cr3tp@ssw0rd
 
 ; connection time out when connecting to the server
-<<<<<<< HEAD
-=======
 ; if not defined, use a default of 5 seconds
->>>>>>> 9bc2812... sample config, documentation updates
-timeout=3
+timeout=5
