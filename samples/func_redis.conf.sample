@@ -6,19 +6,19 @@
 ; the GNU General Public License Version 2. See the LICENSE file
 ; at the top of the source tree.
 ;
-; This file have the basic config for use redis from the asterisk dialplan
+; This is a basic config for use with the REDIS() functions from the asterisk dialplan
 
 
 [general]
 
-; host where is the redis server
+; host of the redis server
 hostname=127.0.0.1
 
-; Port of the redis server
+; port of the redis server
 port=6379
 
 ; Database number in redis
 db=0
 
-; Timeout on connect with the redis server
+; connection time out when connecting to the server
 timeout=3

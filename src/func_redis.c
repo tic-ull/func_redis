@@ -1,7 +1,11 @@
 /*
  * func_redis.c
  * 
- * Author : Sergio Medina Toledo <lumasepa at gmail>
+ * Original Author : Sergio Medina Toledo <lumasepa at gmail>
+ * https://github.com/tic-ull/func_redis
+ *
+ * Forked and extended by : Alan Graham <ag at zerohalo>
+ * https://github.com/zerohalo/func_redis
  *
  * This program is free software, distributed under the terms of
  * the GNU General Public License Version 2. See the LICENSE file
@@ -13,6 +17,7 @@
  * \brief Functions for interaction with Redis database
  *
  * \author Sergio Medina Toledo <lumasepa at gmail>
+ * \author Alan Graham <ag at zerohalo>
  *
  * \ingroup functions
  */
@@ -252,30 +257,32 @@ static int load_config()
 	return 1;
 }
 
-
-
 static int function_redis_read(struct ast_channel *chan, const char *cmd,
 			    char *parse, char *buf, size_t len)
 {
 	AST_DECLARE_APP_ARGS(args,
 		AST_APP_ARG(key);
+		AST_APP_ARG(hash);
 	);
 
 	buf[0] = '\0';
 
 	if (ast_strlen_zero(parse)) {
-		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>)\n");
+		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>) or REDIS(<key>,<hash>)\n");
 		return -1;
 	}
 
 	AST_STANDARD_APP_ARGS(args, parse);
 
-	if (args.argc != 1) {
-		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>)\n");
+	if (args.argc < 1 || args.argc > 2) {
+		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>) or REDIS(<key>,<hash>)\n");
 		return -1;
+	} else if (args.argc == 1) {
+		reply = redisLoggedCommand(redis,"GET %s", args.key);
+	} else if (args.argc == 2) {
+		reply = redisLoggedCommand(redis,"HGET %s %s", args.key, args.hash);
 	}
 
-	reply = redisLoggedCommand(redis,"GET %s", args.key);
 
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
@@ -298,21 +305,24 @@ static int function_redis_write(struct ast_channel *chan, const char *cmd, char 
 {
 	AST_DECLARE_APP_ARGS(args,
 		AST_APP_ARG(key);
+		AST_APP_ARG(hash);
 	);
 
 	if (ast_strlen_zero(parse)) {
-		ast_log(LOG_WARNING, "REDIS requires one argument, REDIS(<key>)=<value>\n");
+		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>)=<value> or REDIS(<key>,<hash>)=<value>\n");
 		return -1;
 	}
 
 	AST_STANDARD_APP_ARGS(args, parse);
 
-	if (args.argc != 1) {
-		ast_log(LOG_WARNING, "REDIS requires one argument, REDIS(<key>)=<value>\n");
+	if (args.argc < 1 || args.argc > 2) {
+		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>)=<value> or REDIS(<key>,<hash>)=<value>\n");
 		return -1;
+	} else if (args.argc == 1) {
+		reply = redisLoggedCommand(redis,"SET %s %s", args.key, value);
+	} else if (args.argc == 2) {
+		reply = redisLoggedCommand(redis,"HSET %s %s %s", args.key, args.hash, value);
 	}
-
-	reply = redisLoggedCommand(redis,"SET %s %s", args.key, value);
 
 	if (replyHaveError(reply)) {
 		ast_log(LOG_WARNING, "REDIS: Error writing value to database.\n");
@@ -475,15 +485,22 @@ static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_c
 			e->command = "redis set";
 			e->usage =
 					"Usage: redis set <key> <value>\n"
-							"       Creates an entry in the Redis database for a given key and value.\n";
+							"       Creates an entry in the Redis database for a given key and value.\n"
+							"redis set <key> <hash> <value>\n"
+							"		Creates an entry in the Redis database for a given key, hash and value\n";
 			return NULL;
 		case CLI_GENERATE:
 			return NULL;
 	}
 
-	if (a->argc != 4)
+	if (a->argc < 4 || a->argc > 5)
 		return CLI_SHOWUSAGE;
-	reply = redisLoggedCommand(redis,"SET %s %s", a->argv[2], a->argv[3]);
+
+	if (a->argc == 4) {
+		reply = redisLoggedCommand(redis,"SET %s %s", a->argv[2], a->argv[3]);
+	} else if (a->argc == 5){
+		reply = redisLoggedCommand(redis,"HSET %s %s %s", a->argv[2], a->argv[3], a->argv[4]);
+	}
 
 	if (replyHaveError(reply)) {
         ast_cli(a->fd, "%s\n", reply->str);
@@ -574,8 +591,47 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 	return CLI_SUCCESS;
 }
 
+static char *handle_cli_redis_hshow(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
+{
+	switch (cmd) {
+	case CLI_INIT:
+		e->command = "redis hshow";
+		e->usage =
+			"Usage: redis hshow <hash>\n"
+			"       Shows Redis hash contents\n";
+		return NULL;
+	case CLI_GENERATE:
+		return NULL;
+	}
+	
+	if (a->argc == 3) {
+		/* key */
+		reply = redisLoggedCommand(redis,"HKEYS %s", a->argv[2]);
+	} else {
+		return CLI_SHOWUSAGE;
+	}
+	
+	int i = 0;
+	redisReply * get_reply;
+
+	for(i = 0; i < reply->elements; i++){
+		get_reply = redisLoggedCommand(redis,"HGET %s %s", a->argv[2], reply->element[i]->str);
+	    if(get_reply != NULL)
+	    {
+			ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, get_reply->str);
+	    }
+		freeReplyObject(get_reply);
+	}
+
+	ast_cli(a->fd, "%d results found.\n", (int)reply->elements);
+	freeReplyObject(reply);
+
+	return CLI_SUCCESS;
+}
+
 static struct ast_cli_entry cli_func_redis[] = {
 	AST_CLI_DEFINE(handle_cli_redis_show, "Get all Redis values or by pattern in key"),
+	AST_CLI_DEFINE(handle_cli_redis_hshow, "Get all hash values in key"),
 	AST_CLI_DEFINE(handle_cli_redis_del, "Delete a key - value in Redis"),
 	AST_CLI_DEFINE(handle_cli_redis_set, "Creates a new key - value in Redis"),
 };
