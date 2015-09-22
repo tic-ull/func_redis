@@ -112,6 +112,9 @@ bgsave=false
 #### Delete a key
 ```same => n,NoOp(Deleting test key ${REDIS_DELETE(test)})```
 
+#### Delete a hash field
+```same => n,NoOp(Deleting hash field ${REDIS_DELETE(test,field)})```
+
 #### Check if a key exists
 ```same => n,GotoIf(${REDIS_EXISTS(test)}?exists:doesnt_exist)```
 

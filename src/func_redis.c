@@ -4,7 +4,7 @@
  * Original Author : Sergio Medina Toledo <lumasepa at gmail>
  * https://github.com/tic-ull/func_redis
  *
- * Forked and extended by : Alan Graham <ag at zerohalo>
+ * Contributor : Alan Graham <ag at zerohalo>
  * https://github.com/zerohalo/func_redis
  *
  * This program is free software, distributed under the terms of
@@ -23,7 +23,6 @@
  */
 
 /*** MODULEINFO
-    <depend>hiredis</depend>
 	<support_level>extended</support_level>
 	<depend>hiredis</depend>
  ***/
@@ -31,7 +30,7 @@
 
 #include <asterisk.h>
 
-ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 3 $")
+ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 4 $")
 
 #include <asterisk/module.h>
 #include <asterisk/channel.h>
@@ -100,6 +99,7 @@ ast_log(LOG_DEBUG, __VA_ARGS__); \
 		</synopsis>
 		<syntax>
 			<parameter name="key" required="true" />
+			<parameter name="hash" required="false" />
 		</syntax>
 		<description>
 			<para>This function will retrieve a value from the Redis database
@@ -206,7 +206,7 @@ static int load_config(void)
 	ast_mutex_lock(&redis_lock);
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "hostname"))) {
-		ast_log(LOG_WARNING,
+		ast_log(LOG_NOTICE,
 				"No redis hostname, using localhost as default.\n");
 		conf_str =  "127.0.0.1";
 	}
@@ -214,7 +214,7 @@ static int load_config(void)
 	ast_copy_string(hostname, conf_str, sizeof(hostname));
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "port"))) {
-		ast_log(LOG_WARNING,
+		ast_log(LOG_NOTICE,
 				"No redis port found, using 6379 as default.\n");
 		conf_str = "6379";
 	}
@@ -222,7 +222,7 @@ static int load_config(void)
 	port = atoi(conf_str);
 	
 	if (!(conf_str = ast_variable_retrieve(config, "general", "database"))) {
-		ast_log(LOG_WARNING,
+		ast_log(LOG_NOTICE,
 				"Redis: No database found, using '0' as default.\n");
 		conf_str =  "0";
 	}
@@ -230,7 +230,7 @@ static int load_config(void)
 	ast_copy_string(dbname, conf_str, sizeof(dbname));
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "password"))) {
-		ast_log(LOG_WARNING,
+		ast_log(LOG_NOTICE,
 				"No redis password found, disabling authentication.\n");
 		conf_str =  "";
 	}
@@ -238,7 +238,7 @@ static int load_config(void)
 	ast_copy_string(password, conf_str, sizeof(password));
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "timeout"))) {
-		ast_log(LOG_WARNING,
+		ast_log(LOG_NOTICE,
 				"No redis timeout found, using 5 seconds as default.\n");
 		conf_str = "5";
 	}
@@ -246,7 +246,7 @@ static int load_config(void)
 	timeout.tv_sec = atoi(conf_str);
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "bgsave"))) {
-		ast_log(LOG_WARNING,
+		ast_log(LOG_NOTICE,
 				"No bgsave setting found, using default of false.\n");
 		conf_str =  "false";
 	}
@@ -279,24 +279,24 @@ static int redis_connect(void)
 	}
 
 	if (strlen(password) != 0) {
-		ast_log(LOG_WARNING,"Authenticating.\n");
-		reply = redisLoggedCommand(redis,"AUTH %s", password);
-		if (redis == NULL || redis->err != 0) {
-			ast_log(LOG_ERROR, "Unable to authenticate. Reason: %s\n", redis->errstr);
+		ast_log(LOG_NOTICE,"REDIS : Authenticating...\n");
+		reply = redisCommand(redis,"AUTH %s", password);
+		if (replyHaveError(reply)) {
+			ast_log(LOG_ERROR, "Unable to authenticate. Reason: %s\n", reply->str);
 			return -1;
 		}
-		ast_log(LOG_WARNING, "Authenticated.\n");
+		ast_log(LOG_NOTICE, "REDIS : Authenticated.\n");
 		freeReplyObject(reply);
 	}
 
 	if (strlen(dbname) != 0) {
-		ast_log(LOG_WARNING,"Selecting DB %s\n", dbname);
+		ast_log(LOG_NOTICE,"Selecting DB %s\n", dbname);
 		reply = redisLoggedCommand(redis,"SELECT %s", dbname);
-		if (redis == NULL || redis->err != 0) {
-			ast_log(LOG_ERROR, "Unable to select DB %s. Reason: %s\n", dbname, redis->errstr);
+		if (replyHaveError(reply)) {
+			ast_log(LOG_ERROR, "Unable to select DB %s. Reason: %s\n", dbname, reply->str);
 			return -1;
 		}
-		ast_log(LOG_WARNING, "Database %s selected.\n", dbname);
+		ast_log(LOG_NOTICE, "Database %s selected.\n", dbname);
 		freeReplyObject(reply);
 	}
 	return 1;
@@ -367,7 +367,7 @@ static int function_redis_write(struct ast_channel *chan, const char *cmd, char 
 	}
 
 	if (replyHaveError(reply)) {
-        ast_log(LOG_WARNING, "REDIS: Error writing value to database. Reason: %s\n", redis->errstr);
+        ast_log(LOG_WARNING, "REDIS: Error writing value to database. Reason: %s\n", reply->str);
     }
 
 	freeReplyObject(reply);
@@ -432,6 +432,7 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 {
 	AST_DECLARE_APP_ARGS(args,
 		AST_APP_ARG(key);
+		AST_APP_ARG(hash);
 	);
 
 	buf[0] = '\0';
@@ -448,7 +449,14 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 		return -1;
 	}
 
-	reply = redisLoggedCommand(redis,"DEL %s", args.key);
+    if (args.argc < 1 || args.argc > 2) {
+        ast_log(LOG_WARNING, "REDIS_DELETE requires an argument, REDIS_DELETE(<key>) or REDIS_DELETE(<key>,<hash>)\n");
+        return -1;
+    } else if (args.argc == 1) {
+        reply = redisLoggedCommand(redis,"DEL %s", args.key);
+    } else if (args.argc == 2) {
+        reply = redisLoggedCommand(redis,"HDEL %s %s", args.key, args.hash);
+    }
 
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
@@ -501,7 +509,7 @@ static int function_redis_publish(struct ast_channel *chan, const char *cmd, cha
 	reply = redisLoggedCommand(redis,"PUBLISH %s %s", args.redis_channel, value);
 
 	if (replyHaveError(reply)) {
-        ast_log(LOG_ERROR, "REDIS: Error publishing message. Reason: %s\n", redis->errstr);
+        ast_log(LOG_ERROR, "REDIS: Error publishing message. Reason: %s\n", reply->str);
 	} else {
         char * value = get_reply_value_as_str(reply);
         pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", value);
@@ -560,19 +568,25 @@ static char *handle_cli_redis_del(struct ast_cli_entry *e, int cmd, struct ast_c
 		e->usage =
 			"Usage: redis del <key>\n"
 			"       Deletes an entry in the Redis database for a given key.\n";
+            "       redis del <key> <hash>\n"
+            "		Deletes an field of a hash for a given key and hash\n";
 		return NULL;
 	case CLI_GENERATE:
 		return NULL;
 	}
 
-	if (a->argc != 3)
-		return CLI_SHOWUSAGE;
-	reply = redisLoggedCommand(redis,"DEL %s", a->argv[2]);
+    if (a->argc < 3 || a->argc > 4)
+        return CLI_SHOWUSAGE;
+
+    if (a->argc == 3) {
+        reply = redisLoggedCommand(redis,"DEL %s", a->argv[2]);
+    } else if (a->argc == 5){
+        reply = redisLoggedCommand(redis,"HDEL %s %s", a->argv[2], a->argv[3]);
+    }
 	
 	if (replyHaveError(reply)) {
         ast_cli(a->fd, "%s\n", reply->str);
 		ast_cli(a->fd, "Redis database entry does not exist.\n");
-
 	} else {
 		ast_cli(a->fd, "Redis database entry removed.\n");
 	}
@@ -717,8 +731,7 @@ static int reload(void)
 	ast_log(LOG_WARNING,"Reloading.\n");
 	if(load_config() == -1 || redis_connect() == -1)
 		return AST_MODULE_LOAD_DECLINE;
-	int res = 0;
-	return res;
+	return 0;
 }
 
 AST_MODULE_INFO(ASTERISK_GPL_KEY, AST_MODFLAG_DEFAULT, "Redis related dialplan functions",
