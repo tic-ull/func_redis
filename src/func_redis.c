@@ -222,14 +222,15 @@ static int load_config()
 		conf_str =  "0";
 	}
 
+	ast_copy_string(dbname, conf_str, sizeof(dbname));
+
 	if (!(conf_str = ast_variable_retrieve(config, "general", "password"))) {
 		ast_log(LOG_WARNING,
 				"Redis: No password found, disabling authentication.\n");
 		conf_str =  "";
 	}
-		conf_str = password;
 
-	ast_copy_string(dbname, conf_str, sizeof(dbname));
+	ast_copy_string(password, conf_str, sizeof(password));
 
 	if (!(conf_str = ast_variable_retrieve(config, "general", "timeout"))) {
 		ast_log(LOG_WARNING,
@@ -256,18 +257,22 @@ static int redis_connect()
 	}
 
 	redis = redisConnectWithTimeout(hostname, port, timeout);
+
 	if (redis == NULL || redis->err != 0) {
 		ast_log(LOG_ERROR,
 			"Redis: Couldn't establish connection.\n");
 		return -1;
 	}
 
-	if (password) {
+	if (strlen(password) != 0) {
+		ast_log(LOG_WARNING,"Redis: Authenticating.\n");
 		reply = redisLoggedCommand(redis,"AUTH %s", password);
 		if (redis == NULL || redis->err != 0) {
 			ast_log(LOG_ERROR, "REDIS: Unable to authenticate.\n");
 			return -1;
 		}
+
+		freeReplyObject(reply);
 	}
 
 	return 1;
