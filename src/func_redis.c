@@ -138,8 +138,9 @@ static char * get_reply_value_as_str(redisReply *reply){
     char * value;
     if (reply != NULL){
         if (replyHaveError(reply)) {
-            ast_log(LOG_ERROR, "%s\n", reply->str);
-
+            ast_log(LOG_WARNING, "%s\n", reply->str);
+            value = (char*)malloc(1);
+            (*value) = (char)"\0";
         } else if (reply->type == REDIS_REPLY_NIL){
             ast_log(LOG_DEBUG, "REDIS: reply is NIL \n");
             value = (char*)malloc(1);
@@ -163,7 +164,6 @@ static char * get_reply_value_as_str(redisReply *reply){
                 value = (char *) realloc(value, resize_sz);
                 snprintf(value, resize_sz, "%s , %s", value, element_value);
                 free(element_value);
-                element_value = NULL;
             }
             size_t value_new_sz = strlen(value) + 3;
             value = (char *) realloc(value, value_new_sz);
