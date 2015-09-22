@@ -170,7 +170,8 @@ static char * get_reply_value_as_str(redisReply *reply){
             value = (char*)malloc(3);
             snprintf(value, 3, "[ ");
             char * element_value = NULL;
-            for (int i = 0; i < reply->elements; ++i) {
+            int i = 0;
+            for (i = 0; i < reply->elements; ++i) {
                 element_value = get_reply_value_as_str(reply->element[i]);
                 size_t resize_sz = strlen(value) + strlen(element_value) + 4;
                 value = (char *) realloc(value, resize_sz);
