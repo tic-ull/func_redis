@@ -1,6 +1,11 @@
 ; func_redis.conf.sample
 ;
-; Author : Sergio Medina Toledo <lumasepa at gmail>
+; Original Author : Sergio Medina Toledo <lumasepa at gmail>
+; https://github.com/tic-ull/func_redis
+;
+; Forked and extended by : Alan Graham <ag at zerohalo>
+; https://github.com/zerohalo/func_redis
+; 
 ;
 ; This program is free software, distributed under the terms of
 ; the GNU General Public License Version 2. See the LICENSE file
@@ -10,18 +15,26 @@
 
 
 [general]
-
 ; host of the redis server
+; if not defined, use default of 127.0.0.1
 hostname=127.0.0.1
 
 ; port of the redis server
+if not defined, use default of 6379
 port=6379
 
-; Database number in redis
-db=0
+; database index in redis
+; if not defined, use default of 0
+database=0
+
 
 ; password for redis server
+; if not defined, authentication will not be used
 ;password=s3cr3tp@ssw0rd
 
 ; connection time out when connecting to the server
+<<<<<<< HEAD
+=======
+; if not defined, use a default of 5 seconds
+>>>>>>> 9bc2812... sample config, documentation updates
 timeout=3

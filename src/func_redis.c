@@ -218,7 +218,7 @@ static int load_config()
 
 	port = atoi(conf_str);
 	
-	if (!(conf_str = ast_variable_retrieve(config, "general", "db"))) {
+	if (!(conf_str = ast_variable_retrieve(config, "general", "database"))) {
 		ast_log(LOG_WARNING,
 				"Redis: No database found, using '0' as default.\n");
 		conf_str =  "0";

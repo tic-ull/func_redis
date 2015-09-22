@@ -69,16 +69,24 @@ Here an example of the file :
 
 ```
 [general]
-; host of the redis server 
+; host of the redis server
+; if not defined, use default of 127.0.0.1
 hostname=127.0.0.1
+
 ; port of the redis server
+if not defined, use default of 6379
 port=6379
-; Database number in redis
-db=0
+
+; database index in redis
+; if not defined, use default of 0
+database=0
+
 ; password for redis server
-; if not set, authentication will not be used
+; if not defined, authentication will not be used
 ;password=s3cr3tp@ssw0rd
+
 ; connection time out when connecting to the server
+; if not defined, use a default of 5 seconds
 timeout=3
 ```
 
