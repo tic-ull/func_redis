@@ -75,6 +75,9 @@ hostname=127.0.0.1
 port=6379
 ; Database number in redis
 db=0
+; password for redis server
+; if not set, authentication will not be used
+;password=s3cr3tp@ssw0rd
 ; connection time out when connecting to the server
 timeout=3
 ```
