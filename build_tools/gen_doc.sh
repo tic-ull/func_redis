@@ -9,9 +9,9 @@
 # the GNU General Public License Version 2. See the LICENSE file
 # at the top of the source tree.
 
-ASTVARDIR=`cat /etc/asterisk/asterisk.conf| grep astvarlibdir | cut -d ">" -f2`
+ASTDATADIR=`cat /etc/asterisk/asterisk.conf | grep -v "^;" | grep astdatadir  | cut -d ">" -f2`
 
-DOC_FILE="$ASTVARDIR/documentation/thirdparty/func_redis-en_US.xml"
+DOC_FILE="$ASTDATADIR/documentation/thirdparty/func_redis-en_US.xml"
 
 echo "Building Documentation"
 echo "Creating $DOC_FILE"
