@@ -49,7 +49,9 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 4 $")
 
 
 #define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
-ast_log(LOG_DEBUG, __VA_ARGS__); \
+snprintf (__log_buffer, 1024, __VA_ARGS__); \
+ast_log(LOG_DEBUG, "%s\n", __log_buffer);
+
 
 
 #define replyHaveError(reply) (reply != NULL && reply->type == REDIS_REPLY_ERROR)
@@ -144,19 +146,17 @@ static char password[STR_CONF_SZ] = "";
 static char bgsave[STR_CONF_SZ] = "";
 static int port = 6379;
 static struct timeval timeout;
-
+static char * __log_buffer = NULL;
 
 static char * get_reply_value_as_str(redisReply *reply){
     char * value;
     if (reply != NULL){
         if (replyHaveError(reply)) {
             ast_log(LOG_WARNING, "%s\n", reply->str);
-            value = (char*)malloc(1);
-            (*value) = (char)"\0";
+            value = NULL;
         } else if (reply->type == REDIS_REPLY_NIL){
             ast_log(LOG_DEBUG, "REDIS: reply is NIL \n");
-            value = (char*)malloc(1);
-            (*value) = (char)"\0";
+            value = NULL;
 
         }else if (reply->type == REDIS_REPLY_INTEGER){
             value = (char*)malloc(LONG_LONG_LEN_IN_STR);
@@ -173,10 +173,12 @@ static char * get_reply_value_as_str(redisReply *reply){
             int i = 0;
             for (i = 0; i < reply->elements; ++i) {
                 element_value = get_reply_value_as_str(reply->element[i]);
-                size_t resize_sz = strlen(value) + strlen(element_value) + 4;
-                value = (char *) realloc(value, resize_sz);
-                snprintf(value, resize_sz, "%s , %s", value, element_value);
-                free(element_value);
+				if (element_value) {
+					size_t resize_sz = strlen(value) + strlen(element_value) + 4;
+					value = (char *) realloc(value, resize_sz);
+					snprintf(value, resize_sz, "%s , %s", value, element_value);
+					free(element_value);
+				}
             }
             size_t value_new_sz = strlen(value) + 3;
             value = (char *) realloc(value, value_new_sz);
@@ -184,8 +186,7 @@ static char * get_reply_value_as_str(redisReply *reply){
         }
     } else {
         ast_log(LOG_ERROR, "REDIS: reply is NULL \n");
-        value = (char*)malloc(1);
-        (*value) = (char)"\0";
+        value = NULL;
     }
     return value;
 }
@@ -329,14 +330,13 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
 		reply = redisLoggedCommand(redis,"HGET %s %s", args.key, args.hash);
 	}
 
-	if (replyHaveError(reply)) {
-        ast_log(LOG_ERROR, "%s\n", reply->str);
-	}else{
-        char * value = get_reply_value_as_str(reply);
+	char * value = get_reply_value_as_str(reply);
+	if(value) {
 		strcpy(buf, value);
 		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", value);
-        free(value);
+		free(value);
 	}
+
 
 	freeReplyObject(reply);
 
@@ -513,8 +513,10 @@ static int function_redis_publish(struct ast_channel *chan, const char *cmd, cha
         ast_log(LOG_ERROR, "REDIS: Error publishing message. Reason: %s\n", reply->str);
 	} else {
         char * value = get_reply_value_as_str(reply);
-        pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", value);
-        free(value);
+		if(value) {
+			pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", value);
+			free(value);
+		}
     }
 
 	freeReplyObject(reply);
@@ -634,8 +636,10 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 	    if(get_reply != NULL)
 	    {
             char * value = get_reply_value_as_str(get_reply);
-            ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, value);
-            free(value);
+			if (value) {
+				ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, value);
+				free(value);
+			}
 	    }
 		freeReplyObject(get_reply);
 	}
@@ -695,6 +699,8 @@ static int unload_module(void)
 {
 	int res = 0;
 
+	free(__log_buffer);
+
 	if (ast_true(bgsave)) {
 		ast_log(LOG_WARNING, "Sending BGSAVE before closing connection.\n");
 		reply = redisLoggedCommand(redis, "BGSAVE");
@@ -714,6 +720,7 @@ static int unload_module(void)
 
 static int load_module(void)
 {
+	__log_buffer = malloc(1024);
 	if(load_config() == -1 || redis_connect() == -1)
 		return AST_MODULE_LOAD_DECLINE;
 	int res = 0;
