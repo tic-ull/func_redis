@@ -13,7 +13,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 project(func_redis)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -shared -fPIC -Wall -pedantic")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -shared -fPIC -Wall -pedantic -Wextra")
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 

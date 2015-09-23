@@ -148,41 +148,33 @@ static int port = 6379;
 static struct timeval timeout;
 static char * __log_buffer = NULL;
 
+
+/*!
+ * \brief Method for get an string from a redis reply, it is a helper method
+ */
 static char * get_reply_value_as_str(redisReply *reply){
     char * value;
     if (reply != NULL){
-        if (replyHaveError(reply)) {
-            ast_log(LOG_WARNING, "%s\n", reply->str);
-            value = NULL;
-        } else if (reply->type == REDIS_REPLY_NIL){
-            ast_log(LOG_DEBUG, "REDIS: reply is NIL \n");
-            value = NULL;
-
-        }else if (reply->type == REDIS_REPLY_INTEGER){
-            value = (char*)malloc(LONG_LONG_LEN_IN_STR);
-            snprintf(value, LONG_LONG_LEN_IN_STR, "%lld", reply->integer);
-
-        }else if (reply->type == REDIS_REPLY_STRING){
-            value = (char*)malloc(strlen(reply->str) + 1);
-            snprintf(value, strlen(reply->str) + 1, "%s", reply->str);
-
-        }else if (reply->type == REDIS_REPLY_ARRAY){
-            value = (char*)malloc(3);
-            snprintf(value, 3, "[ ");
-            char * element_value = NULL;
-            int i = 0;
-            for (i = 0; i < reply->elements; ++i) {
-                element_value = get_reply_value_as_str(reply->element[i]);
-				if (element_value) {
-					size_t resize_sz = strlen(value) + strlen(element_value) + 4;
-					value = (char *) realloc(value, resize_sz);
-					snprintf(value, resize_sz, "%s , %s", value, element_value);
-					free(element_value);
-				}
-            }
-            size_t value_new_sz = strlen(value) + 3;
-            value = (char *) realloc(value, value_new_sz);
-            snprintf(value, value_new_sz, "%s ]", value);
+        switch (reply->type){
+            case REDIS_REPLY_NIL:
+            case REDIS_REPLY_ERROR:
+                ast_log(LOG_WARNING, "REDIS: reply error or nil : %s\n", reply->str);
+                value = NULL;
+                break;
+            case REDIS_REPLY_INTEGER:
+                value = (char*)malloc(LONG_LONG_LEN_IN_STR);
+                snprintf(value, LONG_LONG_LEN_IN_STR, "%lld", reply->integer);
+                break;
+            case REDIS_REPLY_STRING:
+                value = (char*)malloc(strlen(reply->str) + 1);
+                snprintf(value, strlen(reply->str) + 1, "%s", reply->str);
+                break;
+            case REDIS_REPLY_ARRAY: // Right now it will never response this
+                value = NULL;
+                break;
+            default:
+                value = NULL;
+                break;
         }
     } else {
         ast_log(LOG_ERROR, "REDIS: reply is NULL \n");
@@ -191,7 +183,9 @@ static char * get_reply_value_as_str(redisReply *reply){
     return value;
 }
 
-
+/*!
+ * \brief Handles the load of the config of the module
+ */
 static int load_config(void)
 {
 	struct ast_config *config;
@@ -265,8 +259,11 @@ static int load_config(void)
 	return 1;
 }
 
-static int redis_connect(void)
 
+/*!
+ * \brief Handles the connection to redis, the auth and the selection of the database
+ */
+static int redis_connect(void)
 {
 	if (redis) {
 		redisFree(redis);
@@ -512,10 +509,10 @@ static int function_redis_publish(struct ast_channel *chan, const char *cmd, cha
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "REDIS: Error publishing message. Reason: %s\n", reply->str);
 	} else {
-        char * value = get_reply_value_as_str(reply);
-		if(value) {
-			pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", value);
-			free(value);
+        char *reply_value = get_reply_value_as_str(reply);
+		if(reply_value) {
+			pbx_builtin_setvar_helper(chan, "REDIS_PUBLISH_RESULT", reply_value);
+			free(reply_value);
 		}
     }
 
@@ -542,7 +539,8 @@ static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_c
 			return NULL;
 		case CLI_GENERATE:
 			return NULL;
-	}
+        default:break;
+    }
 
 	if (a->argc < 4 || a->argc > 5)
 		return CLI_SHOWUSAGE;
@@ -566,16 +564,17 @@ static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_c
 static char *handle_cli_redis_del(struct ast_cli_entry *e, int cmd, struct ast_cli_args *a)
 {
 	switch (cmd) {
-	case CLI_INIT:
-		e->command = "redis del";
-		e->usage =
-			"Usage: redis del <key>\n"
-			"       Deletes an entry in the Redis database for a given key.\n";
-            "       redis del <key> <hash>\n"
-            "		Deletes an field of a hash for a given key and hash\n";
+		case CLI_INIT:
+			e->command = "redis del";
+			e->usage =
+				"Usage: redis del <key>\n"
+				"       Deletes an entry in the Redis database for a given key.\n"
+				"       redis del <key> <hash>\n"
+				"		Deletes an field of a hash for a given key and hash\n";
+			return NULL;
+		case CLI_GENERATE:
 		return NULL;
-	case CLI_GENERATE:
-		return NULL;
+		default:break;
 	}
 
     if (a->argc < 3 || a->argc > 4)
@@ -616,7 +615,8 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 		return NULL;
 	case CLI_GENERATE:
 		return NULL;
-	}
+        default:break;
+    }
 	
 	if (a->argc == 3) {
 		/* key */
@@ -661,7 +661,8 @@ static char *handle_cli_redis_hshow(struct ast_cli_entry *e, int cmd, struct ast
 		return NULL;
 	case CLI_GENERATE:
 		return NULL;
-	}
+        default:break;
+    }
 	
 	if (a->argc == 3) {
 		/* key */
