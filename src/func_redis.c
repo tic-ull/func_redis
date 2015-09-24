@@ -30,7 +30,7 @@
 
 #include <asterisk.h>
 
-ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 4 $")
+ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 5 $")
 
 #include <asterisk/module.h>
 #include <asterisk/channel.h>
@@ -46,16 +46,6 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 4 $")
 
 #include <hiredis/hiredis.h>
 #include <errno.h>
-
-
-#define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
-snprintf (__log_buffer, 1024, __VA_ARGS__); \
-ast_log(LOG_DEBUG, "%s\n", __log_buffer);
-
-
-
-#define replyHaveError(reply) (reply != NULL && reply->type == REDIS_REPLY_ERROR)
-
 
 /*** DOCUMENTATION
 	<function name="REDIS" language="en_US">
@@ -135,18 +125,28 @@ ast_log(LOG_DEBUG, "%s\n", __log_buffer);
 // max size of long long [−9223372036854775807,+9223372036854775807]
 #define LONG_LONG_LEN_IN_STR 20
 
+#define __LOG_BUFFER_SZ 1024
+
+#define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
+snprintf (__log_buffer, __LOG_BUFFER_SZ, __VA_ARGS__); \
+ast_log(LOG_DEBUG, "%s\n", __log_buffer);
+
+
+#define replyHaveError(reply) (reply != NULL && reply->type == REDIS_REPLY_ERROR)
+
+
 AST_MUTEX_DEFINE_STATIC(redis_lock);
 
-redisContext * redis = NULL;
-redisReply * reply = NULL;
+static redisContext * redis = NULL;
+static redisReply * reply = NULL;
 
 static char hostname[STR_CONF_SZ] = "";
 static char dbname[STR_CONF_SZ] = "";
 static char password[STR_CONF_SZ] = "";
 static char bgsave[STR_CONF_SZ] = "";
-static int port = 6379;
+static unsigned int port = 6379;
 static struct timeval timeout;
-static char * __log_buffer = NULL;
+static char __log_buffer[__LOG_BUFFER_SZ] = "";
 
 
 /*!
@@ -166,7 +166,7 @@ static char * get_reply_value_as_str(redisReply *reply){
                 snprintf(value, LONG_LONG_LEN_IN_STR, "%lld", reply->integer);
                 break;
             case REDIS_REPLY_STRING:
-                value = (char*)malloc(strlen(reply->str) + 1);
+                value = (char*)malloc(strnlen(reply->str, (size_t)reply->len) + 1);
                 snprintf(value, strlen(reply->str) + 1, "%s", reply->str);
                 break;
             case REDIS_REPLY_ARRAY: // Right now it will never response this
@@ -215,7 +215,7 @@ static int load_config(void)
 		conf_str = "6379";
 	}
 
-	port = atoi(conf_str);
+	port = (unsigned int)atoi(conf_str);
 	
 	if (!(conf_str = ast_variable_retrieve(config, "general", "database"))) {
 		ast_log(LOG_NOTICE,
@@ -277,7 +277,7 @@ static int redis_connect(void)
 		return -1;
 	}
 
-	if (strlen(password) != 0) {
+	if (strnlen(password, STR_CONF_SZ) != 0) {
 		ast_log(LOG_NOTICE,"REDIS : Authenticating...\n");
 		reply = redisCommand(redis,"AUTH %s", password);
 		if (replyHaveError(reply)) {
@@ -288,7 +288,7 @@ static int redis_connect(void)
 		freeReplyObject(reply);
 	}
 
-	if (strlen(dbname) != 0) {
+	if (strnlen(dbname, STR_CONF_SZ) != 0) {
 		ast_log(LOG_NOTICE,"Selecting DB %s\n", dbname);
 		reply = redisLoggedCommand(redis,"SELECT %s", dbname);
 		if (replyHaveError(reply)) {
@@ -302,14 +302,14 @@ static int redis_connect(void)
 }
 
 static int function_redis_read(struct ast_channel *chan, const char *cmd,
-			    char *parse, char *buf, size_t len)
+			    char *parse, char *return_buffer, size_t rtn_buff_len)
 {
 	AST_DECLARE_APP_ARGS(args,
 		AST_APP_ARG(key);
 		AST_APP_ARG(hash);
 	);
 
-	buf[0] = '\0';
+	return_buffer[0] = '\0';
 
 	if (ast_strlen_zero(parse)) {
 		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>) or REDIS(<key>,<hash>)\n");
@@ -329,7 +329,7 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
 
 	char * value = get_reply_value_as_str(reply);
 	if(value) {
-		strcpy(buf, value);
+		snprintf(return_buffer, rtn_buff_len, "%s", value);
 		pbx_builtin_setvar_helper(chan, "REDIS_RESULT", value);
 		free(value);
 	}
@@ -380,13 +380,13 @@ static struct ast_custom_function redis_function = {
 };
 
 static int function_redis_exists(struct ast_channel *chan, const char *cmd,
-			      char *parse, char *buf, size_t len)
+			      char *parse, char *return_buffer, size_t rtn_buff_len)
 {
 	AST_DECLARE_APP_ARGS(args,
 		AST_APP_ARG(key);
 	);
 
-	buf[0] = '\0';
+	return_buffer[0] = '\0';
 
 	if (ast_strlen_zero(parse)) {
 		ast_log(LOG_WARNING, "REDIS_EXISTS requires one argument, REDIS(<key>)\n");
@@ -407,14 +407,14 @@ static int function_redis_exists(struct ast_channel *chan, const char *cmd,
         ast_log(LOG_ERROR, "%s\n", reply->str);
 
 	} else if (reply->integer == 1){
-		strcpy(buf, "1");
+		strncpy(return_buffer, "1", rtn_buff_len);
 	} else if (reply->integer == 0){
-        strcpy(buf, "0");
+        strncpy(return_buffer, "0", rtn_buff_len);
     } else {
         ast_log(LOG_WARNING, "REDIS EXIST failed\n");
-        strcpy(buf, "0");
+        strncpy(return_buffer, "0", rtn_buff_len);
     }
-    pbx_builtin_setvar_helper(chan, "REDIS_RESULT", buf);
+    pbx_builtin_setvar_helper(chan, "REDIS_RESULT", return_buffer);
 
 	return 0;
 }
@@ -426,14 +426,14 @@ static struct ast_custom_function redis_exists_function = {
 };
 
 static int function_redis_delete(struct ast_channel *chan, const char *cmd,
-			      char *parse, char *buf, size_t len)
+			      char *parse, char *return_buffer, size_t rtn_buff_len)
 {
 	AST_DECLARE_APP_ARGS(args,
 		AST_APP_ARG(key);
 		AST_APP_ARG(hash);
 	);
 
-	buf[0] = '\0';
+	return_buffer[0] = '\0';
 
 	if (ast_strlen_zero(parse)) {
 		ast_log(LOG_WARNING, "REDIS_DELETE requires an argument, REDIS_DELETE(<key>)\n");
@@ -475,8 +475,8 @@ static int function_redis_delete_write(struct ast_channel *chan, const char *cmd
 	const char *value)
 {
 	/* Throwaway to hold the result from the read */
-	char buf[128];
-	return function_redis_delete(chan, cmd, parse, buf, sizeof(buf));
+	char return_buffer[128];
+	return function_redis_delete(chan, cmd, parse, return_buffer, sizeof(return_buffer));
 }
 
 static struct ast_custom_function redis_delete_function = {
@@ -700,8 +700,6 @@ static int unload_module(void)
 {
 	int res = 0;
 
-	free(__log_buffer);
-
 	if (ast_true(bgsave)) {
 		ast_log(LOG_WARNING, "Sending BGSAVE before closing connection.\n");
 		reply = redisLoggedCommand(redis, "BGSAVE");
@@ -721,16 +719,16 @@ static int unload_module(void)
 
 static int load_module(void)
 {
-	__log_buffer = malloc(1024);
 	if(load_config() == -1 || redis_connect() == -1)
 		return AST_MODULE_LOAD_DECLINE;
 	int res = 0;
 	
 	ast_cli_register_multiple(cli_func_redis, ARRAY_LEN(cli_func_redis));
-	res |= ast_custom_function_register_escalating(&redis_function, AST_CFE_BOTH);
+
+	res |= ast_custom_function_register(&redis_function);
 	res |= ast_custom_function_register(&redis_exists_function);
-	res |= ast_custom_function_register_escalating(&redis_delete_function, AST_CFE_READ);
-	res |= ast_custom_function_register_escalating(&redis_publish_function, AST_CFE_WRITE);
+	res |= ast_custom_function_register(&redis_delete_function);
+	res |= ast_custom_function_register(&redis_publish_function);
 
 	return res;
 }
