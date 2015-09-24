@@ -144,7 +144,18 @@ You can use these commands related to func_redis in the Asterisk CLI
 4. ```redis del <key>```
     Deletes the key-value pair in redis.
 
+## Code security and tools
 
+To check if the code uses insecure functions and make some security checks run
+
+```make security_checks```
+
+for security checks it uses the nexts static analizers :
+
+- cppcheck
+- graudit
+- flawfinder
+ 
 ## Contribute and collaborate
 
 Im open to contributions, if you make a pull-request I will merge it.

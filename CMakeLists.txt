@@ -36,4 +36,6 @@ add_custom_target(samples COMMAND cp "${CMAKE_SOURCE_DIR}/samples/func_redis.con
 
 add_custom_target(uninstall COMMAND rm -f "${ASTERISK_LIBRARY_DIR}/func_redis.so" && rm -f /etc/asterisk/func_redis.conf )
 
+add_custom_target(security_checks COMMAND ${CMAKE_SOURCE_DIR}/build_tools/check_security.sh)
+
 add_custom_target(doc COMMAND ./build_tools/gen_doc.sh)
