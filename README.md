@@ -74,7 +74,7 @@ Here an example of the file :
 hostname=127.0.0.1
 
 ; port of the redis server
-if not defined, use default of 6379
+; if not defined, use default of 6379
 port=6379
 
 ; database index in redis
