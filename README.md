@@ -49,11 +49,13 @@ but the performance is low compared to a asterisk module and the integration is 
         
 ## Instalation
 1. Install the dependencies
-2. ```cmake -DCMAKE_BUILD_TYPE=Release .```
-3. ```make```
-4. ```make install```
-5. ```make samples```
-6. ```make doc```
+2. ```mkdir build```
+3. ```cd build```
+4. ```cmake -DCMAKE_BUILD_TYPE=Release ..```
+5. ```make```
+6. ```make install```
+7. ```make samples```
+8. ```make doc```
 
 
 ## Uninstall 
@@ -98,28 +100,28 @@ bgsave=false
 ### Using func_redis from the Dialplan
 
 #### Set a key value
-```same => n,Set(REDIS(test)=${TEST})```
+```same => n,Set(REDIS(key)=${VALUE})```
 
 #### Set a hash value
-```same => n,Set(REDIS(test,field)=${TEST})```
+```same => n,Set(REDIS(key,field)=${VALUE})```
 
 #### Get the value from a key
-```same => n,Set(TEST=${REDIS(test)})```
+```same => n,Set(VALUE=${REDIS(key)})```
 
 #### Get the value from a hash
-```same => n,Set(TEST=${REDIS(test,field)})```
+```same => n,Set(VALUE=${REDIS(key,field)})```
 
 #### Delete a key
-```same => n,NoOp(Deleting test key ${REDIS_DELETE(test)})```
+```same => n,NoOp(Deleting test key ${REDIS_DELETE(key)})```
 
 #### Delete a hash field
-```same => n,NoOp(Deleting hash field ${REDIS_DELETE(test,field)})```
+```same => n,NoOp(Deleting hash field ${REDIS_DELETE(key,field)})```
 
 #### Check if a key exists
-```same => n,GotoIf(${REDIS_EXISTS(test)}?exists:doesnt_exist)```
+```same => n,GotoIf(${REDIS_EXISTS(key)}?exists:doesnt_exist)```
 
 #### Publish a message to a redis channel
-```same => n,Set(REDIS_PUBLISH(channel)=test)```
+```same => n,Set(REDIS_PUBLISH(channel)=msg)```
 
 ### Using func_redis from the CLI
 
@@ -144,17 +146,30 @@ You can use these commands related to func_redis in the Asterisk CLI
 4. ```redis del <key>```
     Deletes the key-value pair in redis.
 
+## Develop environment
+ 
+ This repo have a Vagrantfile with the needed configuration to have a functional yet basic development environment.
+ To use it you should run
+ 
+ ```vagrant up```
+ 
+ ```vagrant ssh```
+ 
+ You can find the project in the vm in the folder /func_redis
+ 
+
 ## Code security and tools
 
 To check if the code uses insecure functions and make some security checks run
 
 ```make security_checks```
 
-for security checks it uses the nexts static analizers :
+for security checks it uses the nexts static analyzers :
 
 - cppcheck
 - graudit
 - flawfinder
+
  
 ## Contribute and collaborate
 
