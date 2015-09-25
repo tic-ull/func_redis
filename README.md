@@ -147,16 +147,34 @@ You can use these commands related to func_redis in the Asterisk CLI
     Deletes the key-value pair in redis.
 
 ## Develop environment
+
+#### Start Developing
  
- This repo have a Vagrantfile with the needed configuration to have a functional yet basic development environment.
- To use it you should run
+This repo have a Vagrantfile with the needed configuration to have a functional yet basic development environment.
+To use it you should run
  
- ```vagrant up```
+```
+vagrant up
+vagrant ssh
+```
  
- ```vagrant ssh```
+You can find the project in the vm in the folder /func_redis. 
+You can make the changes that you wish and then 
  
- You can find the project in the vm in the folder /func_redis
+```
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make
+make install
+```
  
+#### Testing the module
+ 
+I don't use a proper test suite but in exchange I test the module making use of the dialplan,
+call files and local channels, to run the test
+
+```make test```
 
 ## Code security and tools
 
