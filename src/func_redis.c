@@ -95,8 +95,7 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 5 $")
 		</syntax>
 		<description>
 			<para>This function will retrieve a value from the Redis database
-			and then remove that key from the database. <variable>REDIS_RESULT</variable>
-			will be set to the key's value if it exists.</para>
+			and then remove that key from the database.</para>
 		</description>
 	</function>
  	<function name="REDIS_PUBLISH" language="en_US">
@@ -153,13 +152,14 @@ static char __log_buffer[__LOG_BUFFER_SZ] = "";
  * \brief Method for get an string from a redis reply, it is a helper method
  */
 static char * get_reply_value_as_str(redisReply *reply){
-    char * value;
+    char * value = NULL;
     if (reply != NULL){
         switch (reply->type){
             case REDIS_REPLY_NIL:
+                ast_log(LOG_DEBUG, "REDIS: reply is nil");
+                break;
             case REDIS_REPLY_ERROR:
-                ast_log(LOG_WARNING, "REDIS: reply error or nil : %s\n", reply->str);
-                value = NULL;
+                ast_log(LOG_WARNING, "REDIS: reply error : %s\n", reply->str);
                 break;
             case REDIS_REPLY_INTEGER:
                 value = (char*)malloc(LONG_LONG_LEN_IN_STR);
@@ -170,10 +170,7 @@ static char * get_reply_value_as_str(redisReply *reply){
                 snprintf(value, strlen(reply->str) + 1, "%s", reply->str);
                 break;
             case REDIS_REPLY_ARRAY: // Right now it will never response this
-                value = NULL;
-                break;
             default:
-                value = NULL;
                 break;
         }
     } else {
@@ -436,16 +433,11 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 	return_buffer[0] = '\0';
 
 	if (ast_strlen_zero(parse)) {
-		ast_log(LOG_WARNING, "REDIS_DELETE requires an argument, REDIS_DELETE(<key>)\n");
+		ast_log(LOG_WARNING, "REDIS_DELETE requires an argument, REDIS_DELETE(<key>) or REDIS_DELETE(<key>,<hash>)\n");
 		return -1;
 	}
 
 	AST_STANDARD_APP_ARGS(args, parse);
-
-	if (args.argc != 1) {
-		ast_log(LOG_WARNING, "REDIS_DELETE requires an argument, REDIS_DELETE(<key>)\n");
-		return -1;
-	}
 
     if (args.argc < 1 || args.argc > 2) {
         ast_log(LOG_WARNING, "REDIS_DELETE requires an argument, REDIS_DELETE(<key>) or REDIS_DELETE(<key>,<hash>)\n");

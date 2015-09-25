@@ -38,4 +38,6 @@ add_custom_target(uninstall COMMAND rm -f "${ASTERISK_LIBRARY_DIR}/func_redis.so
 
 add_custom_target(security_checks COMMAND ${CMAKE_SOURCE_DIR}/build_tools/check_security.sh)
 
-add_custom_target(doc COMMAND ./build_tools/gen_doc.sh)
+add_custom_target(doc COMMAND ${CMAKE_SOURCE_DIR}/build_tools/gen_doc.sh)
+
+add_custom_target(test COMMAND ${CMAKE_SOURCE_DIR}/build_tools/asterisk_dialplan_test.sh ${CMAKE_SOURCE_DIR})
