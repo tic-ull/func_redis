@@ -126,11 +126,6 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 5 $")
 
 #define __LOG_BUFFER_SZ 1024
 
-#define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
-snprintf (__log_buffer, __LOG_BUFFER_SZ, __VA_ARGS__); \
-ast_log(LOG_DEBUG, "%s\n", __log_buffer);
-
-
 #define replyHaveError(reply) (reply != NULL && reply->type == REDIS_REPLY_ERROR)
 
 
@@ -147,6 +142,25 @@ static unsigned int port = 6379;
 static struct timeval timeout;
 static char __log_buffer[__LOG_BUFFER_SZ] = "";
 
+
+static redisReply * redisLoggedCommand(redisContext * redis, const char* fmt, ...)
+{
+    void *_reply = NULL;
+
+    va_list ap;
+    va_start(ap, fmt);
+
+    ast_mutex_lock(&redis_lock);
+        _reply = redisvCommand(redis, fmt, ap);
+    ast_mutex_unlock(&redis_lock);
+
+    vsnprintf(__log_buffer, __LOG_BUFFER_SZ, fmt, ap);
+    va_end(ap);
+
+    ast_log(LOG_DEBUG, "%s\n", __log_buffer);
+
+    return _reply;
+}
 
 /*!
  * \brief Method for get an string from a redis reply, it is a helper method
@@ -273,10 +287,14 @@ static int redis_connect(void)
 			"Couldn't establish connection. Reason: %s\n", redis->errstr);
 		return -1;
 	}
+    // Very important or it can block the dialplan waiting for the socket response
+    redisSetTimeout(redis, timeout);
 
 	if (strnlen(password, STR_CONF_SZ) != 0) {
 		ast_log(LOG_NOTICE,"REDIS : Authenticating...\n");
-		reply = redisCommand(redis,"AUTH %s", password);
+        ast_mutex_lock(&redis_lock);
+		    reply = redisCommand(redis,"AUTH %s", password);
+        ast_mutex_unlock(&redis_lock);
 		if (replyHaveError(reply)) {
 			ast_log(LOG_ERROR, "Unable to authenticate. Reason: %s\n", reply->str);
 			return -1;
