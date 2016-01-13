@@ -19,14 +19,33 @@ fi
 
 asterisk -rx "dialplan reload"
 
-echo -e "
+
+function make_call {
+
+    echo -e "
 Channel: Local/2@test_func_redis
 Callerid: 1000
 Context: test_func_redis
 Extension: 1
 Priority: 1
 " > /tmp/test_func_redis.callfile
+mv /tmp/test_func_redis.callfile /var/spool/asterisk/outgoing/
+}
 
-(sleep 1 && mv /tmp/test_func_redis.callfile /var/spool/asterisk/outgoing/)&
 
-tail -f /var/log/asterisk/full
+(sleep 30 && make_call)&
+(sleep 31 && make_call)&
+(sleep 32 && make_call)&
+(sleep 33 && make_call)&
+(sleep 34 && make_call)&
+(sleep 35 && make_call)&
+(sleep 36 && make_call)&
+
+
+#tail -f /var/log/asterisk/full | grep "ERROR|WARNING" --color
+
+gdb -ex=r --args asterisk -cgvvvvvvvvvvvvvv
+#valgrind --leak-check=full asterisk -cgvvvvvvvvvvvvvvv
+killall asterisk
+
+exit 0
