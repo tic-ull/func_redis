@@ -136,9 +136,6 @@ ast_log(LOG_DEBUG, "%s\n", __log_buffer);
 
 AST_MUTEX_DEFINE_STATIC(redis_lock);
 
-static redisContext * redis = NULL;
-static redisReply * reply = NULL;
-
 static char hostname[STR_CONF_SZ] = "";
 static char dbname[STR_CONF_SZ] = "";
 static char password[STR_CONF_SZ] = "";
@@ -147,6 +144,63 @@ static unsigned int port = 6379;
 static struct timeval timeout;
 static char __log_buffer[__LOG_BUFFER_SZ] = "";
 
+static int redis_connect(void * data);
+static int redis_disconnect(void * data);
+AST_THREADSTORAGE_CUSTOM(redis_instance, redis_connect, redis_disconnect);
+
+/*!
+ * \brief Handles the connection to redis, the auth and the selection of the database
+ */
+static int redis_connect(void * data)
+{
+    redisContext * redis_context = NULL;
+    redis_context = redisConnectWithTimeout(hostname, port, timeout);
+
+    if (redis_context == NULL) {
+        ast_log(LOG_ERROR,
+                "Couldn't establish connection. Reason: UNKNOWN\n");
+        return -1;
+    }
+
+    if(redis_context->err != 0){
+        ast_log(LOG_ERROR,
+                "Couldn't establish connection. Reason: %s\n", redis_context->errstr);
+        return -1;
+    }
+
+    redisReply * reply = NULL;
+    if (strnlen(password, STR_CONF_SZ) != 0) {
+        ast_log(LOG_DEBUG,"REDIS : Authenticating...\n");
+        reply = redisCommand(redis_context,"AUTH %s", password);
+        if (replyHaveError(reply)) {
+            ast_log(LOG_ERROR, "Unable to authenticate. Reason: %s\n", reply->str);
+            return -1;
+        }
+        ast_log(LOG_DEBUG, "REDIS : Authenticated.\n");
+        freeReplyObject(reply);
+    }
+
+    if (strnlen(dbname, STR_CONF_SZ) != 0) {
+        ast_log(LOG_DEBUG,"Selecting DB %s\n", dbname);
+        reply = redisLoggedCommand(redis_context,"SELECT %s", dbname);
+        if (replyHaveError(reply)) {
+            ast_log(LOG_ERROR, "Unable to select DB %s. Reason: %s\n", dbname, reply->str);
+            return -1;
+        }
+        ast_log(LOG_DEBUG, "Database %s selected.\n", dbname);
+        freeReplyObject(reply);
+    }
+
+    memcpy(data, redis_context, sizeof(redisContext));
+    // TODO Free redis_context
+    return 0;
+}
+
+static int redis_disconnect(void *data){
+    redisContext * redis_context = data;
+    redisFree(redis_context);
+    return 0;
+}
 
 /*!
  * \brief Method for get an string from a redis reply, it is a helper method
@@ -156,7 +210,7 @@ static char * get_reply_value_as_str(redisReply *reply){
     if (reply != NULL){
         switch (reply->type){
             case REDIS_REPLY_NIL:
-                ast_log(LOG_DEBUG, "REDIS: reply is nil");
+                ast_log(LOG_DEBUG, "REDIS: reply is nil \n");
                 break;
             case REDIS_REPLY_ERROR:
                 ast_log(LOG_WARNING, "REDIS: reply error : %s\n", reply->str);
@@ -213,7 +267,7 @@ static int load_config(void)
 	}
 
 	port = (unsigned int)atoi(conf_str);
-	
+
 	if (!(conf_str = ast_variable_retrieve(config, "general", "database"))) {
 		ast_log(LOG_NOTICE,
 				"Redis: No database found, using '0' as default.\n");
@@ -257,47 +311,6 @@ static int load_config(void)
 }
 
 
-/*!
- * \brief Handles the connection to redis, the auth and the selection of the database
- */
-static int redis_connect(void)
-{
-	if (redis) {
-		redisFree(redis);
-	}
-
-	redis = redisConnectWithTimeout(hostname, port, timeout);
-
-	if (redis == NULL || redis->err != 0) {
-		ast_log(LOG_ERROR,
-			"Couldn't establish connection. Reason: %s\n", redis->errstr);
-		return -1;
-	}
-
-	if (strnlen(password, STR_CONF_SZ) != 0) {
-		ast_log(LOG_NOTICE,"REDIS : Authenticating...\n");
-		reply = redisCommand(redis,"AUTH %s", password);
-		if (replyHaveError(reply)) {
-			ast_log(LOG_ERROR, "Unable to authenticate. Reason: %s\n", reply->str);
-			return -1;
-		}
-		ast_log(LOG_NOTICE, "REDIS : Authenticated.\n");
-		freeReplyObject(reply);
-	}
-
-	if (strnlen(dbname, STR_CONF_SZ) != 0) {
-		ast_log(LOG_NOTICE,"Selecting DB %s\n", dbname);
-		reply = redisLoggedCommand(redis,"SELECT %s", dbname);
-		if (replyHaveError(reply)) {
-			ast_log(LOG_ERROR, "Unable to select DB %s. Reason: %s\n", dbname, reply->str);
-			return -1;
-		}
-		ast_log(LOG_NOTICE, "Database %s selected.\n", dbname);
-		freeReplyObject(reply);
-	}
-	return 1;
-}
-
 static int function_redis_read(struct ast_channel *chan, const char *cmd,
 			    char *parse, char *return_buffer, size_t rtn_buff_len)
 {
@@ -315,15 +328,25 @@ static int function_redis_read(struct ast_channel *chan, const char *cmd,
 
 	AST_STANDARD_APP_ARGS(args, parse);
 
+    redisReply * reply = NULL;
 	if (args.argc < 1 || args.argc > 2) {
 		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>) or REDIS(<key>,<hash>)\n");
 		return -1;
-	} else if (args.argc == 1) {
-		reply = redisLoggedCommand(redis,"GET %s", args.key);
-	} else if (args.argc == 2) {
-		reply = redisLoggedCommand(redis,"HGET %s %s", args.key, args.hash);
-	}
+	} else {
+        redisContext * redis_context = NULL;
+        if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+        {
+            ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+            return -1;
+        }
+        if (args.argc == 1) {
 
+            reply = redisLoggedCommand(redis_context,"GET %s", args.key);
+        } else if (args.argc == 2) {
+
+            reply = redisLoggedCommand(redis_context,"HGET %s %s", args.key, args.hash);
+        }
+    }
 	char * value = get_reply_value_as_str(reply);
 	if(value) {
 		snprintf(return_buffer, rtn_buff_len, "%s", value);
@@ -352,14 +375,23 @@ static int function_redis_write(struct ast_channel *chan, const char *cmd, char 
 
 	AST_STANDARD_APP_ARGS(args, parse);
 
+    redisReply * reply = NULL;
 	if (args.argc < 1 || args.argc > 2) {
 		ast_log(LOG_WARNING, "REDIS requires an argument, REDIS(<key>)=<value> or REDIS(<key>,<hash>)=<value>\n");
 		return -1;
-	} else if (args.argc == 1) {
-		reply = redisLoggedCommand(redis,"SET %s %s", args.key, value);
-	} else if (args.argc == 2) {
-		reply = redisLoggedCommand(redis,"HSET %s %s %s", args.key, args.hash, value);
-	}
+	} else {
+        redisContext * redis_context = NULL;
+        if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+        {
+            ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+            return -1;
+        }
+        if (args.argc == 1) {
+            reply = redisLoggedCommand(redis_context,"SET %s %s", args.key, value);
+        } else if (args.argc == 2) {
+            reply = redisLoggedCommand(redis_context,"HSET %s %s %s", args.key, args.hash, value);
+        }
+    }
 
 	if (replyHaveError(reply)) {
         ast_log(LOG_WARNING, "REDIS: Error writing value to database. Reason: %s\n", reply->str);
@@ -397,8 +429,23 @@ static int function_redis_exists(struct ast_channel *chan, const char *cmd,
 		return -1;
 	}
 
+    redisReply * reply = NULL;
+    redisContext * redis_context = NULL;
+    if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+    {
+        ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+        return -1;
+    }
+	reply = redisLoggedCommand(redis_context,"EXISTS %s", args.key);
 
-	reply = redisLoggedCommand(redis,"EXISTS %s", args.key);
+    if(reply == NULL){
+        ast_log(LOG_ERROR, "Redis reply is NULL\n");
+    }
+
+    if(reply == NULL){
+        ast_log(LOG_ERROR, "Redis reply is NULL\n");
+        return -1;
+    }
 
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
@@ -439,15 +486,28 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 
 	AST_STANDARD_APP_ARGS(args, parse);
 
+    redisReply * reply = NULL;
+
     if (args.argc < 1 || args.argc > 2) {
         ast_log(LOG_WARNING, "REDIS_DELETE requires an argument, REDIS_DELETE(<key>) or REDIS_DELETE(<key>,<hash>)\n");
         return -1;
-    } else if (args.argc == 1) {
-        reply = redisLoggedCommand(redis,"DEL %s", args.key);
-    } else if (args.argc == 2) {
-        reply = redisLoggedCommand(redis,"HDEL %s %s", args.key, args.hash);
+    } else {
+        redisContext * redis_context = NULL;
+        if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+        {
+            ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+            return -1;
+        }
+        if (args.argc == 1) {
+            reply = redisLoggedCommand(redis_context,"DEL %s", args.key);
+        } else if (args.argc == 2) {
+            reply = redisLoggedCommand(redis_context,"HDEL %s %s", args.key, args.hash);
+        }
     }
-
+    if(reply == NULL) {
+        ast_log(LOG_ERROR, "Redis reply is NULL\n");
+        return -1;
+    }
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
 	} else if (reply->integer == 0){
@@ -496,7 +556,14 @@ static int function_redis_publish(struct ast_channel *chan, const char *cmd, cha
 		return -1;
 	}
 
-	reply = redisLoggedCommand(redis,"PUBLISH %s %s", args.redis_channel, value);
+    redisReply * reply = NULL;
+    redisContext * redis_context = NULL;
+    if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+    {
+        ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+        return -1;
+    }
+	reply = redisLoggedCommand(redis_context,"PUBLISH %s %s", args.redis_channel, value);
 
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "REDIS: Error publishing message. Reason: %s\n", reply->str);
@@ -537,10 +604,17 @@ static char *handle_cli_redis_set(struct ast_cli_entry *e, int cmd, struct ast_c
 	if (a->argc < 4 || a->argc > 5)
 		return CLI_SHOWUSAGE;
 
+    redisReply * reply = NULL;
+    redisContext * redis_context = NULL;
+    if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+    {
+        ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+        return CLI_FAILURE;
+    }
 	if (a->argc == 4) {
-		reply = redisLoggedCommand(redis,"SET %s %s", a->argv[2], a->argv[3]);
+		reply = redisLoggedCommand(redis_context,"SET %s %s", a->argv[2], a->argv[3]);
 	} else if (a->argc == 5){
-		reply = redisLoggedCommand(redis,"HSET %s %s %s", a->argv[2], a->argv[3], a->argv[4]);
+		reply = redisLoggedCommand(redis_context,"HSET %s %s %s", a->argv[2], a->argv[3], a->argv[4]);
 	}
 
 	if (replyHaveError(reply)) {
@@ -572,12 +646,19 @@ static char *handle_cli_redis_del(struct ast_cli_entry *e, int cmd, struct ast_c
     if (a->argc < 3 || a->argc > 4)
         return CLI_SHOWUSAGE;
 
-    if (a->argc == 3) {
-        reply = redisLoggedCommand(redis,"DEL %s", a->argv[2]);
-    } else if (a->argc == 5){
-        reply = redisLoggedCommand(redis,"HDEL %s %s", a->argv[2], a->argv[3]);
+    redisReply * reply = NULL;
+    redisContext * redis_context = NULL;
+    if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+    {
+        ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+        return CLI_FAILURE;
     }
-	
+    if (a->argc == 3) {
+        reply = redisLoggedCommand(redis_context,"DEL %s", a->argv[2]);
+    } else if (a->argc == 5){
+        reply = redisLoggedCommand(redis_context,"HDEL %s %s", a->argv[2], a->argv[3]);
+    }
+
 	if (replyHaveError(reply)) {
         ast_cli(a->fd, "%s\n", reply->str);
 		ast_cli(a->fd, "Redis database entry does not exist.\n");
@@ -609,22 +690,29 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 		return NULL;
         default:break;
     }
-	
+
+    redisReply * reply = NULL;
+    redisContext * redis_context = NULL;
+    if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+    {
+        ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+        return CLI_FAILURE;
+    }
 	if (a->argc == 3) {
 		/* key */
-		reply = redisLoggedCommand(redis,"KEYS %s", a->argv[2]);
+		reply = redisLoggedCommand(redis_context,"KEYS %s", a->argv[2]);
 	} else if (a->argc == 2) {
 		/* show all */
-		reply = redisLoggedCommand(redis,"KEYS *");
+		reply = redisLoggedCommand(redis_context,"KEYS *");
 	} else {
 		return CLI_SHOWUSAGE;
 	}
-	
+
 	int i = 0;
 	redisReply * get_reply;
 
 	for(i = 0; i < reply->elements; i++){
-		get_reply = redisLoggedCommand(redis,"GET %s", reply->element[i]->str);
+		get_reply = redisLoggedCommand(redis_context,"GET %s", reply->element[i]->str);
 	    if(get_reply != NULL)
 	    {
             char * value = get_reply_value_as_str(get_reply);
@@ -655,19 +743,26 @@ static char *handle_cli_redis_hshow(struct ast_cli_entry *e, int cmd, struct ast
 		return NULL;
         default:break;
     }
-	
+
+    redisReply * reply = NULL;
+    redisContext * redis_context = NULL;
+    if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+    {
+        ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+        return CLI_FAILURE;
+    }
 	if (a->argc == 3) {
 		/* key */
-		reply = redisLoggedCommand(redis,"HKEYS %s", a->argv[2]);
+		reply = redisLoggedCommand(redis_context,"HKEYS %s", a->argv[2]);
 	} else {
 		return CLI_SHOWUSAGE;
 	}
-	
+
 	int i = 0;
 	redisReply * get_reply;
 
 	for(i = 0; i < reply->elements; i++){
-		get_reply = redisLoggedCommand(redis,"HGET %s %s", a->argv[2], reply->element[i]->str);
+		get_reply = redisLoggedCommand(redis_context,"HGET %s %s", a->argv[2], reply->element[i]->str);
 	    if(get_reply != NULL)
 	    {
 			ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, get_reply->str);
@@ -692,13 +787,19 @@ static int unload_module(void)
 {
 	int res = 0;
 
+    redisReply * reply = NULL;
+    redisContext * redis_context = NULL;
+    if (!(redis_context = ast_threadstorage_get(&redis_instance, sizeof(redisContext))))
+    {
+        ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
+        return -1;
+    }
 	if (ast_true(bgsave)) {
 		ast_log(LOG_WARNING, "Sending BGSAVE before closing connection.\n");
-		reply = redisLoggedCommand(redis, "BGSAVE");
+		reply = redisLoggedCommand(redis_context, "BGSAVE");
 		ast_log(LOG_WARNING, "Closing connection.\n");
 		freeReplyObject(reply);
 	}
-	redisFree(redis);
 
 	ast_cli_unregister_multiple(cli_func_redis, ARRAY_LEN(cli_func_redis));
 	res |= ast_custom_function_unregister(&redis_function);
@@ -711,10 +812,10 @@ static int unload_module(void)
 
 static int load_module(void)
 {
-	if(load_config() == -1 || redis_connect() == -1)
+	if(load_config() == -1)
 		return AST_MODULE_LOAD_DECLINE;
 	int res = 0;
-	
+
 	ast_cli_register_multiple(cli_func_redis, ARRAY_LEN(cli_func_redis));
 
 	res |= ast_custom_function_register(&redis_function);
@@ -728,7 +829,7 @@ static int load_module(void)
 static int reload(void)
 {
 	ast_log(LOG_WARNING,"Reloading.\n");
-	if(load_config() == -1 || redis_connect() == -1)
+	if(load_config() == -1)
 		return AST_MODULE_LOAD_DECLINE;
 	return 0;
 }
