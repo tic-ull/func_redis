@@ -128,7 +128,7 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 5 $")
 
 #define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
 snprintf (__log_buffer, __LOG_BUFFER_SZ, __VA_ARGS__); \
-ast_log(LOG_DEBUG, "%s\n", __log_buffer);
+ast_debug(1, "%s\n", __log_buffer);
 
 
 #define replyHaveError(reply) (reply != NULL && reply->type == REDIS_REPLY_ERROR)
@@ -155,7 +155,6 @@ static int redis_connect(void * data)
 {
     redisContext * redis_context = NULL;
     redis_context = redisConnectWithTimeout(hostname, port, timeout);
-
     if (redis_context == NULL) {
         ast_log(LOG_ERROR,
                 "Couldn't establish connection. Reason: UNKNOWN\n");
@@ -170,24 +169,24 @@ static int redis_connect(void * data)
 
     redisReply * reply = NULL;
     if (strnlen(password, STR_CONF_SZ) != 0) {
-        ast_log(LOG_DEBUG,"REDIS : Authenticating...\n");
+        ast_debug(1,"REDIS : Authenticating...\n");
         reply = redisCommand(redis_context,"AUTH %s", password);
         if (replyHaveError(reply)) {
             ast_log(LOG_ERROR, "Unable to authenticate. Reason: %s\n", reply->str);
             return -1;
         }
-        ast_log(LOG_DEBUG, "REDIS : Authenticated.\n");
+        ast_debug(1, "REDIS : Authenticated.\n");
         freeReplyObject(reply);
     }
 
     if (strnlen(dbname, STR_CONF_SZ) != 0) {
-        ast_log(LOG_DEBUG,"Selecting DB %s\n", dbname);
+        ast_debug(1,"Selecting DB %s\n", dbname);
         reply = redisLoggedCommand(redis_context,"SELECT %s", dbname);
         if (replyHaveError(reply)) {
             ast_log(LOG_ERROR, "Unable to select DB %s. Reason: %s\n", dbname, reply->str);
             return -1;
         }
-        ast_log(LOG_DEBUG, "Database %s selected.\n", dbname);
+        ast_debug(1, "Database %s selected.\n", dbname);
         freeReplyObject(reply);
     }
 
@@ -210,7 +209,7 @@ static char * get_reply_value_as_str(redisReply *reply){
     if (reply != NULL){
         switch (reply->type){
             case REDIS_REPLY_NIL:
-                ast_log(LOG_DEBUG, "REDIS: reply is nil \n");
+                ast_debug(1, "REDIS: reply is nil \n");
                 break;
             case REDIS_REPLY_ERROR:
                 ast_log(LOG_WARNING, "REDIS: reply error : %s\n", reply->str);
@@ -511,7 +510,7 @@ static int function_redis_delete(struct ast_channel *chan, const char *cmd,
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
 	} else if (reply->integer == 0){
-        ast_log(LOG_DEBUG, "REDIS_DELETE: Key %s not found in database.\n", args.key);
+        ast_debug(1, "REDIS_DELETE: Key %s not found in database.\n", args.key);
     }
 
 	freeReplyObject(reply);
