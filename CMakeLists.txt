@@ -13,11 +13,11 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 project(func_redis)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -shared -fPIC -Wall -pedantic -Wextra")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fms-extensions -shared -fPIC -Wall -pedantic -Wextra -Wno-unused-parameter")
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
 
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
 
 
 find_package(asterisk REQUIRED)
@@ -40,4 +40,4 @@ add_custom_target(security_checks COMMAND ${CMAKE_SOURCE_DIR}/build_tools/check_
 
 add_custom_target(doc COMMAND ${CMAKE_SOURCE_DIR}/build_tools/gen_doc.sh ${CMAKE_SOURCE_DIR})
 
-add_custom_target(test COMMAND ${CMAKE_SOURCE_DIR}/build_tools/asterisk_dialplan_test.sh ${CMAKE_SOURCE_DIR})
+add_custom_target(dialplan_test COMMAND ${CMAKE_SOURCE_DIR}/build_tools/asterisk_dialplan_test.sh ${CMAKE_SOURCE_DIR})

@@ -47,6 +47,19 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 5 $")
 #include <hiredis/hiredis.h>
 #include <errno.h>
 
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR == 11
+typedef char *sds;
+struct sdshdr {
+    int len;
+    int free;
+    char buf[];
+};
+void sdsfree(sds s) {
+    if (s == NULL) return;
+    free(s-sizeof(struct sdshdr));
+}
+#endif
+
 /*** DOCUMENTATION
 	<function name="REDIS" language="en_US">
 		<synopsis>
@@ -145,8 +158,9 @@ static struct timeval timeout;
 static char __log_buffer[__LOG_BUFFER_SZ] = "";
 
 static int redis_connect(void * data);
-static int redis_disconnect(void * data);
-AST_THREADSTORAGE_CUSTOM(redis_instance, redis_connect, redis_disconnect);
+static void redis_disconnect(void * data);
+
+AST_THREADSTORAGE_CUSTOM(redis_instance, redis_connect, redis_disconnect)
 
 /*!
  * \brief Handles the connection to redis, the auth and the selection of the database
@@ -191,14 +205,44 @@ static int redis_connect(void * data)
     }
 
     memcpy(data, redis_context, sizeof(redisContext));
-    // TODO Free redis_context
+    free(redis_context);
     return 0;
 }
 
-static int redis_disconnect(void *data){
+static void redis_disconnect(void *data){
     redisContext * redis_context = data;
-    redisFree(redis_context);
-    return 0;
+
+    if (redis_context == NULL)
+        return;
+
+    if (redis_context->fd > 0)
+        close(redis_context->fd);
+    if (redis_context->obuf != NULL)
+        sdsfree(redis_context->obuf);
+    if (redis_context->reader != NULL)
+        redisReaderFree(redis_context->reader);
+
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR > 12
+    if (redis_context->tcp.host)
+        free(redis_context->tcp.host);
+    if (redis_context->tcp.source_addr)
+        free(redis_context->tcp.source_addr);
+    if (redis_context->timeout)
+        free(redis_context->timeout);
+#endif
+
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR == 13 && HIREDIS_PATCH == 0
+        if (redis_context->unix.path)
+            free(redis_context->unix.path);
+#endif
+
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR == 13 && HIREDIS_PATCH > 0
+    if (redis_context->unix_sock.path)
+            free(redis_context->unix_sock.path);
+#endif
+
+    free(redis_context);
+    return;
 }
 
 /*!
@@ -448,10 +492,10 @@ static int function_redis_exists(struct ast_channel *chan, const char *cmd,
 
     if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
-
-    } else if (reply->integer == 1){
-        strncpy(return_buffer, "1", rtn_buff_len);
-    } else if (reply->integer == 0){
+        return -1;
+	} else if (reply->integer == 1){
+		strncpy(return_buffer, "1", rtn_buff_len);
+	} else if (reply->integer == 0){
         strncpy(return_buffer, "0", rtn_buff_len);
     } else {
         ast_log(LOG_WARNING, "REDIS EXIST failed\n");
@@ -697,23 +741,23 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
         ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
         return CLI_FAILURE;
     }
-    if (a->argc == 3) {
-        /* key */
-        reply = redisLoggedCommand(redis_context,"KEYS %s", a->argv[2]);
-    } else if (a->argc == 2) {
-        /* show all */
-        reply = redisLoggedCommand(redis_context,"KEYS *");
-    } else {
-        return CLI_SHOWUSAGE;
-    }
+	if (a->argc == 3) {
+		/* key */
+		reply = redisLoggedCommand(redis_context,"KEYS %s", a->argv[2]);
+	} else if (a->argc == 2) {
+		/* show all */
+		reply = redisLoggedCommand(redis_context,"KEYS *");
+	} else {
+		return CLI_SHOWUSAGE;
+	}
 
-    int i = 0;
-    redisReply * get_reply;
+	unsigned int i = 0;
+	redisReply * get_reply;
 
-    for(i = 0; i < reply->elements; i++){
-        get_reply = redisLoggedCommand(redis_context,"GET %s", reply->element[i]->str);
-        if(get_reply != NULL)
-        {
+	for(i = 0; i < reply->elements; i++){
+		get_reply = redisLoggedCommand(redis_context,"GET %s", reply->element[i]->str);
+	    if(get_reply != NULL)
+	    {
             char * value = get_reply_value_as_str(get_reply);
             if (value) {
                 ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, value);
@@ -750,29 +794,29 @@ static char *handle_cli_redis_hshow(struct ast_cli_entry *e, int cmd, struct ast
         ast_log(LOG_ERROR, "Error retrieving the redis context from thread\n");
         return CLI_FAILURE;
     }
-    if (a->argc == 3) {
-        /* key */
-        reply = redisLoggedCommand(redis_context,"HKEYS %s", a->argv[2]);
-    } else {
-        return CLI_SHOWUSAGE;
-    }
+	if (a->argc == 3) {
+		/* key */
+		reply = redisLoggedCommand(redis_context,"HKEYS %s", a->argv[2]);
+	} else {
+		return CLI_SHOWUSAGE;
+	}
 
-    int i = 0;
-    redisReply * get_reply;
+	unsigned int i = 0;
+	redisReply * get_reply;
 
-    for(i = 0; i < reply->elements; i++){
-        get_reply = redisLoggedCommand(redis_context,"HGET %s %s", a->argv[2], reply->element[i]->str);
-        if(get_reply != NULL)
-        {
-            ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, get_reply->str);
-        }
-        freeReplyObject(get_reply);
-    }
+	for(i = 0; i < reply->elements; i++){
+		get_reply = redisLoggedCommand(redis_context,"HGET %s %s", a->argv[2], reply->element[i]->str);
+	    if(get_reply != NULL)
+	    {
+			ast_cli(a->fd, "%-50s: %-25s\n", reply->element[i]->str, get_reply->str);
+	    }
+		freeReplyObject(get_reply);
+	}
 
-    ast_cli(a->fd, "%d results found.\n", (int)reply->elements);
-    freeReplyObject(reply);
+	ast_cli(a->fd, "%d results found.\n", (int)reply->elements);
+	freeReplyObject(reply);
 
-    return CLI_SUCCESS;
+	return CLI_SUCCESS;
 }
 
 static struct ast_cli_entry cli_func_redis[] = {
