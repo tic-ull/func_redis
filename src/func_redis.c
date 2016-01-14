@@ -47,6 +47,19 @@ ASTERISK_FILE_VERSION("func_redis.c", "$Revision: 5 $")
 #include <hiredis/hiredis.h>
 #include <errno.h>
 
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR == 11
+typedef char *sds;
+struct sdshdr {
+    int len;
+    int free;
+    char buf[];
+};
+void sdsfree(sds s) {
+    if (s == NULL) return;
+    free(s-sizeof(struct sdshdr));
+}
+#endif
+
 /*** DOCUMENTATION
 	<function name="REDIS" language="en_US">
 		<synopsis>
@@ -145,8 +158,9 @@ static struct timeval timeout;
 static char __log_buffer[__LOG_BUFFER_SZ] = "";
 
 static int redis_connect(void * data);
-static int redis_disconnect(void * data);
-AST_THREADSTORAGE_CUSTOM(redis_instance, redis_connect, redis_disconnect);
+static void redis_disconnect(void * data);
+
+AST_THREADSTORAGE_CUSTOM(redis_instance, redis_connect, redis_disconnect)
 
 /*!
  * \brief Handles the connection to redis, the auth and the selection of the database
@@ -191,14 +205,44 @@ static int redis_connect(void * data)
     }
 
     memcpy(data, redis_context, sizeof(redisContext));
-    // TODO Free redis_context
+    free(redis_context);
     return 0;
 }
 
-static int redis_disconnect(void *data){
+static void redis_disconnect(void *data){
     redisContext * redis_context = data;
-    redisFree(redis_context);
-    return 0;
+
+    if (redis_context == NULL)
+        return;
+
+    if (redis_context->fd > 0)
+        close(redis_context->fd);
+    if (redis_context->obuf != NULL)
+        sdsfree(redis_context->obuf);
+    if (redis_context->reader != NULL)
+        redisReaderFree(redis_context->reader);
+
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR > 12
+    if (redis_context->tcp.host)
+        free(redis_context->tcp.host);
+    if (redis_context->tcp.source_addr)
+        free(redis_context->tcp.source_addr);
+    if (redis_context->timeout)
+        free(redis_context->timeout);
+#endif
+
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR == 13 && HIREDIS_PATCH == 0
+        if (redis_context->unix.path)
+            free(redis_context->unix.path);
+#endif
+
+#if HIREDIS_MAJOR == 0 && HIREDIS_MINOR == 13 && HIREDIS_PATCH > 0
+    if (redis_context->unix_sock.path)
+            free(redis_context->unix_sock.path);
+#endif
+
+    free(redis_context);
+    return;
 }
 
 /*!
@@ -448,7 +492,7 @@ static int function_redis_exists(struct ast_channel *chan, const char *cmd,
 
 	if (replyHaveError(reply)) {
         ast_log(LOG_ERROR, "%s\n", reply->str);
-
+        return -1;
 	} else if (reply->integer == 1){
 		strncpy(return_buffer, "1", rtn_buff_len);
 	} else if (reply->integer == 0){
@@ -707,7 +751,7 @@ static char *handle_cli_redis_show(struct ast_cli_entry *e, int cmd, struct ast_
 		return CLI_SHOWUSAGE;
 	}
 
-	int i = 0;
+	unsigned int i = 0;
 	redisReply * get_reply;
 
 	for(i = 0; i < reply->elements; i++){
@@ -757,7 +801,7 @@ static char *handle_cli_redis_hshow(struct ast_cli_entry *e, int cmd, struct ast
 		return CLI_SHOWUSAGE;
 	}
 
-	int i = 0;
+	unsigned int i = 0;
 	redisReply * get_reply;
 
 	for(i = 0; i < reply->elements; i++){
