@@ -2,7 +2,7 @@
 
 func_redis is a asterisk module to use Redis from the dialplan.
 It uses hiredis as library for redis.
-I have tested it in Asterisk 11.6 certified version.
+I have tested it in Asterisk 11.6 certified version and asterisk 13.9.
 
 ## Motivation of the project
 
@@ -98,30 +98,34 @@ bgsave=false
 
 
 ### Using func_redis from the Dialplan
+Func redis have two apis one similar to AstDB and another generic, if you don't want to
+learn how redis work use the AstDB API but if you know how redis work you can use the generic API
+that is more powerful
 
-#### Set a key value
+#### AstDB API
+##### Set a key value
 ```same => n,Set(REDIS(key)=${VALUE})```
 
-#### Set a hash value
-```same => n,Set(REDIS(key,field)=${VALUE})```
-
-#### Get the value from a key
+##### Get the value from a key
 ```same => n,Set(VALUE=${REDIS(key)})```
 
-#### Get the value from a hash
-```same => n,Set(VALUE=${REDIS(key,field)})```
-
-#### Delete a key
+##### Delete a key
 ```same => n,NoOp(Deleting test key ${REDIS_DELETE(key)})```
 
-#### Delete a hash field
-```same => n,NoOp(Deleting hash field ${REDIS_DELETE(key,field)})```
-
-#### Check if a key exists
+##### Check if a key exists
 ```same => n,GotoIf(${REDIS_EXISTS(key)}?exists:doesnt_exist)```
 
-#### Publish a message to a redis channel
-```same => n,Set(REDIS_PUBLISH(channel)=msg)```
+#### Generic API 
+##### Every redis comand
+```
+same => n,NoOp(REDIS_COMMAND(PUBLISH channel message))
+same => n,NoOp(REDIS_COMMAND(MGET key1 key2 key3))
+same => n,NoOp(REDIS_COMMAND(LPOP alist))
+```
+
+`REDIS_COMMAND` saves its result in `REDIS_RESULT` it is a string always,
+if the response is an redis array it puts the elements in a coma separated way
+like `value1,value2,value3`
 
 ### Using func_redis from the CLI
 
@@ -134,16 +138,11 @@ You can use these commands related to func_redis in the Asterisk CLI
         - h?llo matches hello, hallo and hxllo
         - h*llo matches hllo and heeeello
         - h[ae]llo matches hello and hallo, but not hillo
-
-2. ```redis hshow <hash>```
-    Shows all the hash's values for a given hash.
     
-3. ```redis set <key> <value>```
+2. ```redis set <key> <value>```
     Sets the key's <key> value to <value>.
-   ```redis set <key> <hash> <value>```
-    Sets the hash's <hash> value <value> for a given key <key>.
     
-4. ```redis del <key>```
+3. ```redis del <key>```
     Deletes the key-value pair in redis.
 
 ## Develop environment
@@ -174,7 +173,7 @@ make install
 I don't use a proper test suite but in exchange I test the module making use of the dialplan,
 call files and local channels, to run the test
 
-```make test```
+```make dialplan_test```
 
 ## Code security and tools
 
