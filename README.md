@@ -100,7 +100,10 @@ bgsave=false
 ### Using func_redis from the Dialplan
 Func redis have two apis one similar to AstDB and another generic, if you don't want to
 learn how redis work use the AstDB API but if you know how redis work you can use the generic API
-that is more powerful
+that is more powerful. All the redis dialplan functions saves its results in REDIS_RESULT it is a string always,
+if the response is an redis array it puts the elements in a coma separated way like `value1,value2,value3` ,
+if the result is a redis nil the REDIS_RESULT is equal to `"nil"`. If there was errors the channel variable 
+REDIS_ERROR is filled with the error.
 
 #### AstDB API
 ##### Set a key value
@@ -122,10 +125,6 @@ same => n,NoOp(REDIS_COMMAND(PUBLISH channel message))
 same => n,NoOp(REDIS_COMMAND(MGET key1 key2 key3))
 same => n,NoOp(REDIS_COMMAND(LPOP alist))
 ```
-
-`REDIS_COMMAND` saves its result in `REDIS_RESULT` it is a string always,
-if the response is an redis array it puts the elements in a coma separated way
-like `value1,value2,value3`
 
 ### Using func_redis from the CLI
 

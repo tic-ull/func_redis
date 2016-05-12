@@ -44,8 +44,8 @@ mv /tmp/test_func_redis.callfile /var/spool/asterisk/outgoing/
 
 #tail -f /var/log/asterisk/full | grep "ERROR|WARNING" --color
 
-#gdb -ex=r --args asterisk -cgdvvvvvvvvvvvvvv
-valgrind --leak-check=full asterisk -cgdvvvvvvvvvvvvvvv
+gdb -ex=r --args asterisk -cgdvvvvvvvvvvvvvv
+#valgrind --suppressions=/usr/src/asterisk-13.9.0/contrib/valgrind.supp --log-fd=9 asterisk -cgdvvvvvvvvvvvvvvv 9> valgrind.tx
 killall asterisk
 
 exit 0
