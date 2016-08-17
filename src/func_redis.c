@@ -119,7 +119,7 @@ void sdsfree(sds s) {
 		<description>
 			<para>Send a command to redis, all redis commands are valid
 			the result is saved in REDIS_RESULT, Example:
-			REDIS_COMMAND("SET key value")
+			REDIS_COMMAND(SET key value)
 			</para>
 		</description>
 		<see-also>
