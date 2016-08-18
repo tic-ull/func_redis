@@ -13,7 +13,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules")
 
 project(func_redis)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fms-extensions -shared -fPIC -Wall -pedantic -Wextra -Wno-unused-parameter")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -fms-extensions -shared -fPIC -Wall -pedantic -Wextra -Wno-unused-parameter -DAST_MODULE_SELF_SYM=__internal_func_redis_self")
 
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
 
