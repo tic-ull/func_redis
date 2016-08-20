@@ -138,6 +138,7 @@ void sdsfree(sds s) {
 
 #define __LOG_BUFFER_SZ 1024
 
+#define MAX_COMMAND_ARGS 15
 
 #define redisLoggedCommand(redis, ...) redisCommand(redis, __VA_ARGS__); \
 snprintf (__log_buffer, __LOG_BUFFER_SZ, __VA_ARGS__); \
@@ -397,11 +398,98 @@ static int load_config(void)
     return 1;
 }
 
+
+#define STATE_NEW 0
+#define STATE_WORD 1
+#define STATE_QUOTED 2
+#define STATE_QUOTED_ESCAPE 3
+
+static int parse_redis_command_args(char *parse, unsigned int *argc, char *argv[], size_t argvlen[], unsigned int max)
+{
+    char *scan = parse;
+
+    char state = STATE_NEW;
+    char overflow = 0;
+
+    *argc = 0;
+    for (; *scan; scan++) {
+        switch (state) {
+            case STATE_NEW:
+                if (*scan == ' ') {
+                    *scan = '\0';
+                } else if (*scan == '"') {
+                    *scan ='\0';
+                    if (*argc == max) {
+                        overflow = 1;
+                        scan--; // back to '\0' to end the loop
+                        break;
+                    }
+                    argv[*argc] = scan + 1;
+                    (*argc)++;
+                    state = STATE_QUOTED;
+                } else {
+                    if (*argc == max) {
+                        overflow = 1;
+                        scan -= 2; // back to '\0' to end the loop
+                        break;
+                    }
+                    argv[*argc] = scan;
+                    argvlen[*argc] = 1;
+                    (*argc)++;
+                    state = STATE_WORD;
+                }
+                break;
+
+            case STATE_WORD:
+                if (*scan == ' ') {
+                    *scan = '\0';
+                    state = STATE_NEW;
+                } else {
+                    argvlen[*argc-1]++;
+                }
+                break;
+
+            case STATE_QUOTED:
+                if (*scan == '\\') {
+                    memmove(scan, scan + 1, strlen(scan));
+                    scan--;
+                    state = STATE_QUOTED_ESCAPE;
+                } else if (*scan == '"') {
+                    *scan = '\0';
+                    state = STATE_NEW;
+                } else {
+                    argvlen[*argc-1]++;
+                }
+                break;
+
+            case STATE_QUOTED_ESCAPE:
+                argvlen[*argc-1]++;
+                state = STATE_QUOTED;
+                break;
+        }
+    }
+
+    if (state == STATE_QUOTED || state == STATE_QUOTED_ESCAPE) {
+        ast_log(LOG_ERROR, "Mismatched quotes in REDIS_COMMAND\n");
+        return 0;
+    }
+
+    if (overflow) {
+        ast_log(LOG_ERROR, "Too many arguments in REDIS_COMMAND\n");
+        return 0;
+    }
+
+    return 1;
+}
+
 static int function_redis_command(struct ast_channel *chan, const char *cmd,
                                  char *parse, char *return_buffer, size_t rtn_buff_len)
 {
-    AST_DECLARE_APP_ARGS(args, AST_APP_ARG(command););
+    unsigned int argc;
+    char *argv[MAX_COMMAND_ARGS];
+    size_t argv_len[MAX_COMMAND_ARGS];
 
+    memset(argv_len, 0, sizeof(argv_len));
     return_buffer[0] = '\0';
 
     if (ast_strlen_zero(parse)) {
@@ -409,17 +497,15 @@ static int function_redis_command(struct ast_channel *chan, const char *cmd,
         return -1;
     }
 
-    AST_STANDARD_APP_ARGS(args, parse);
-
-    if (args.argc != 1) {
-        ast_log(AST_LOG_WARNING, "REDIS_COMMAND requires one argument, REDIS_COMMAND(<command>)\n");
+    if (!parse_redis_command_args(parse, &argc, argv, argv_len, sizeof(argv)/sizeof(argv[0]))) {
+        ast_log(LOG_WARNING, "Failed to parse REDIS_COMMAND arguments\n");
         return -1;
     }
 
     redisReply * reply = NULL;
     get_safe_redis_context_for_func_as(redis_context);
 
-    reply = redisLoggedCommand(redis_context, args.command);
+    reply = redisCommandArgv(redis_context, argc, (const char**) argv, argv_len);
 
     if (replyHaveError(reply)) {
         ast_log(AST_LOG_ERROR, "%s\n", reply->str);
